@@ -1,0 +1,7 @@
+{
+  "name": "MeetApp London",
+  "description": "An AI-powered app to find the fairest meeting point in London for two people based on public transit time. Includes an AI chatbot for location-based questions.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

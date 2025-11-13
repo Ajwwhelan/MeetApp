@@ -23,10 +23,12 @@ export const UserIcon = () => <MaterialIcon name="person" />;
 export const BotIcon = () => <MaterialIcon name="smart_toy" />;
 export const ExternalLinkIcon = () => <MaterialIcon name="open_in_new" className="!text-sm" />;
 export const ShareIcon = () => <MaterialIcon name="share" className="!text-xl" />;
-export const DirectionsIcon = () => <MaterialIcon name="directions" className="!text-xl" />;
+export const DirectionsIcon = ({ className = '!text-xl' }: { className?: string }) => <MaterialIcon name="directions" className={className} />;
 export const StarIcon = () => <MaterialIcon name="star" className="text-amber-500 !text-xl" />;
 export const TflIcon = () => <MaterialIcon name="tram" className="text-red-500 !text-xl" />;
 export const InfoIcon = () => <MaterialIcon name="info" className="text-sky-600 !text-xl" />;
+export const FilterIcon = () => <MaterialIcon name="filter_list" />;
+export const MapIcon = ({ className = '!text-sm' }: { className?: string }) => <MaterialIcon name="map" className={className} />;
 
 export const StartIcon = () => <MaterialIcon name="trip_origin" className="text-blue-600" />;
 export const DestinationIcon = () => <MaterialIcon name="place" className="text-red-600" />;

@@ -4,7 +4,7 @@ import { GoogleGenAI, Chat } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatMessage } from '../types';
-import { CloseIcon, SendIcon, UserIcon, ExternalLinkIcon, BotIcon } from './icons';
+import { CloseIcon, SendIcon, UserIcon, ExternalLinkIcon, BotIcon, DirectionsIcon, MapIcon } from './icons';
 import MapModal from './MapModal';
 
 if (!process.env.API_KEY) {
@@ -140,18 +140,58 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                   <ReactMarkdown
                                       remarkPlugins={[remarkGfm]}
                                       components={{
-                                          a: ({ href, children }) => (
-                                              <button
-                                                  onClick={(e) => {
-                                                      e.preventDefault();
-                                                      handleLinkClick(href || '');
-                                                  }}
-                                                  className="inline-flex items-center gap-1 text-left"
-                                              >
-                                                  {children} <ExternalLinkIcon />
-                                              </button>
-                                          ),
-                                           p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>
+                                          a: ({ href, children }) => {
+                                            if (href && href.includes('google.com/maps/search')) {
+                                                const handleViewOnMap = (e: React.MouseEvent) => {
+                                                    e.preventDefault();
+                                                    handleLinkClick(href);
+                                                };
+                                
+                                                const handleDirections = (e: React.MouseEvent) => {
+                                                    e.preventDefault();
+                                                    try {
+                                                        const url = new URL(href);
+                                                        const placeId = url.searchParams.get('query_place_id');
+                                                        const query = url.searchParams.get('query');
+                                                        let directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query || '')}`;
+                                                        if (placeId) {
+                                                            directionsUrl += `&destination_place_id=${placeId}`;
+                                                        }
+                                                        window.open(directionsUrl, '_blank', 'noopener,noreferrer');
+                                                    } catch (error) {
+                                                        console.error('Error creating directions URL:', error);
+                                                        window.open(href, '_blank', 'noopener,noreferrer');
+                                                    }
+                                                };
+                                
+                                                return (
+                                                    <span className="inline-flex flex-col items-start">
+                                                        {children}
+                                                        <span className="flex items-center gap-2 mt-1.5">
+                                                            <button
+                                                                onClick={handleViewOnMap}
+                                                                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-full transition-colors"
+                                                            >
+                                                                <MapIcon className="!text-sm" /> View on Map
+                                                            </button>
+                                                            <button
+                                                                onClick={handleDirections}
+                                                                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-full transition-colors"
+                                                            >
+                                                                <DirectionsIcon className="!text-sm" /> Directions
+                                                            </button>
+                                                        </span>
+                                                    </span>
+                                                );
+                                            }
+                                            
+                                            return (
+                                                <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1">
+                                                    {children} <ExternalLinkIcon />
+                                                </a>
+                                            );
+                                          },
+                                          p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>
                                       }}
                                   >
                                       {msg.text}

@@ -1,11 +1,12 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { findMeetingPoints } from './services/geminiService';
 import { Venue, GroundingChunk } from './types';
 import LocationInput from './components/LocationInput';
 import VenueCard from './components/VenueCard';
 import Chatbot from './components/Chatbot';
 import { ChatIcon, SearchIcon, ErrorIcon, LoadingIcon } from './components/icons';
+import VenueFilter from './components/VenueFilter';
 
 const App: React.FC = () => {
   const [locationA, setLocationA] = useState<string>('Kings Cross Station, London');
@@ -17,6 +18,8 @@ const App: React.FC = () => {
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number; } | null>(null);
   const [isGeolocating, setIsGeolocating] = useState<boolean>(true);
+  const [selectedVenueType, setSelectedVenueType] = useState<string>('All');
+  const [venueTypes, setVenueTypes] = useState<string[]>(['All']);
 
   const geolocateUser = useCallback(() => {
     setIsGeolocating(true);
@@ -39,6 +42,23 @@ const App: React.FC = () => {
   useEffect(() => {
     geolocateUser();
   }, [geolocateUser]);
+  
+  useEffect(() => {
+    if (venues.length > 0) {
+      const uniqueTypes = ['All', ...Array.from(new Set(venues.map(v => v.type)))];
+      setVenueTypes(uniqueTypes);
+    } else {
+      setVenueTypes(['All']);
+    }
+    setSelectedVenueType('All');
+  }, [venues]);
+
+  const filteredVenues = useMemo(() => {
+    if (selectedVenueType === 'All') {
+      return venues;
+    }
+    return venues.filter(venue => venue.type === selectedVenueType);
+  }, [venues, selectedVenueType]);
 
   const handleFindMeetingPoint = useCallback(async () => {
     if (!locationA || !locationB) {
@@ -133,12 +153,27 @@ const App: React.FC = () => {
 
           {venues.length > 0 && (
             <div className="max-w-5xl mx-auto">
-              <h2 className="text-xl font-bold text-center mb-6 text-gray-800">Suggested Meeting Points</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {venues.map((venue) => (
-                  <VenueCard key={venue.place_id} venue={venue} />
-                ))}
+              <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                <h2 className="text-xl font-bold text-gray-800">Suggested Meeting Points</h2>
+                <VenueFilter 
+                  types={venueTypes} 
+                  selectedType={selectedVenueType} 
+                  onChange={(e) => setSelectedVenueType(e.target.value)}
+                />
               </div>
+              
+              {filteredVenues.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredVenues.map((venue) => (
+                    <VenueCard key={venue.place_id} venue={venue} />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 px-4 bg-white rounded-lg shadow-md">
+                    <p className="text-gray-600">No venues match the "<strong>{selectedVenueType}</strong>" filter.</p>
+                </div>
+              )}
+
               {groundingChunks.length > 0 && (
                  <div className="mt-8 p-4 bg-gray-200 rounded-lg text-sm text-gray-600 border border-gray-300 max-w-lg mx-auto">
                     <h3 className="font-medium text-gray-800 mb-2">Powered by Google Maps</h3>

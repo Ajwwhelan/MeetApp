@@ -11,6 +11,8 @@ export interface Venue {
   tfl_considerations?: string;
   place_id: string;
   photo_url: string;
+  rating?: number;
+  opening_hours?: string;
 }
 
 export interface ChatMessage {

@@ -1,10 +1,9 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Chat } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatMessage } from '../types';
-import { CloseIcon, SendIcon, UserIcon, ExternalLinkIcon, BotIcon, DirectionsIcon, MapIcon } from './icons';
+import { CloseIcon, SendIcon, UserIcon, ExternalLinkIcon, BotIcon, DirectionsIcon, MapIcon, CopyIcon, CheckIcon } from './icons';
 import MapModal from './MapModal';
 
 if (!process.env.API_KEY) {
@@ -24,13 +23,14 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [mapUrl, setMapUrl] = useState<string | null>(null);
+    const [copiedLink, setCopiedLink] = useState<string | null>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
     const initChat = useCallback(() => {
         const newChat = ai.chats.create({
             model: 'gemini-2.5-flash',
             config: {
-                systemInstruction: "You are a helpful assistant for the MeetApp London app. You specialize in London locations, transit, and culture. When a user asks for a list of places (e.g., restaurants, pubs, museums), you MUST format your response as a numbered list. Each item MUST start with a number emoji (1️⃣, 2️⃣, 3️⃣...). The venue name must be a **bolded markdown link** to its Google Maps location. Add a brief, single-paragraph description on a new line below the name. **Crucially, ensure there is a blank line separating each numbered item for readability.**\n\nThe link MUST be a full `https://www.google.com/maps/search/?api=1&query=...` URL. Do not use shortened URLs or links to other websites.\n\nHere is a perfect example:\n\n1️⃣ [**The Folly**](https://www.google.com/maps/search/?api=1&query=The+Folly&query_place_id=ChIJc-Q3jA8bdkgR1lQwn_L0a4I)\nA garden-influenced restaurant and bar with a seasonal menu.\n\n2️⃣ [**Caravan City**](https://www.google.com/maps/search/?api=1&query=Caravan+City&query_place_id=ChIJiQUg_QcbdkgRj8d-2d_e8cI)\nEclectic global cooking in an industrial chic setting.",
+                systemInstruction: "You are a helpful assistant for the MeetApp London app. You specialize in London locations, transit, and culture. When a user asks for a list of places (e.g., restaurants, pubs, museums), you MUST format your response as a markdown-numbered list. For each item, you MUST prepend the venue name with a relevant emoji representing the venue type (e.g., ☕ for a cafe, 🍽️ for a restaurant, 🍺 for a pub, 🌳 for a park, 🏛️ for a museum). The venue name must be a **bolded markdown link** to its Google Maps location. Add a brief, single-paragraph description on a new line below the name. **Crucially, ensure there is a blank line separating each numbered item for readability.**\n\nThe link MUST be a full `https://www.google.com/maps/search/?api=1&query=...` URL. Do not use shortened URLs or links to other websites.\n\nHere is a perfect example:\n\n1. ☕ [**The Folly**](https://www.google.com/maps/search/?api=1&query=The+Folly&query_place_id=ChIJc-Q3jA8bdkgR1lQwn_L0a4I)\nA garden-influenced restaurant and bar with a seasonal menu.\n\n2. 🍽️ [**Caravan City**](https://www.google.com/maps/search/?api=1&query=Caravan+City&query_place_id=ChIJiQUg_QcbdkgRj8d-2d_e8cI)\nEclectic global cooking in an industrial chic setting.",
                 tools: [{ googleMaps: {} }],
                 toolConfig: userCoords ? {
                   retrievalConfig: {
@@ -110,6 +110,15 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
         }
     };
 
+    const handleCopyLink = (url: string) => {
+        navigator.clipboard.writeText(url).then(() => {
+            setCopiedLink(url);
+            setTimeout(() => setCopiedLink(null), 2000); // Reset after 2 seconds
+        }).catch(err => {
+            console.error('Failed to copy link:', err);
+        });
+    };
+
 
     if (!isOpen) return null;
 
@@ -120,7 +129,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                 <header className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50 rounded-t-none md:rounded-t-2xl">
                     <div className="flex items-center gap-3">
                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white"><BotIcon/></div>
-                       <h2 className="text-lg font-medium text-gray-800">MeetApp Assistant</h2>
+                       <h2 className="text-xl font-medium text-gray-800">MeetApp Assistant</h2>
                     </div>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800 p-1 rounded-full hover:bg-gray-200">
                         <CloseIcon />
@@ -128,95 +137,117 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                 </header>
 
                 <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto custom-scrollbar bg-gray-100">
-                    {history.map((msg, index) => (
-                        <div key={index} className={`flex items-start gap-3 my-4 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-                            {msg.role === 'model' && (
-                                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200">
-                                  <BotIcon/>
-                                </div>
-                            )}
-                            <div className={`max-w-xs md:max-w-sm px-4 py-2.5 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none'}`}>
-                                <div className="prose prose-sm max-w-none prose-a:text-blue-600 hover:prose-a:underline">
-                                  <ReactMarkdown
-                                      remarkPlugins={[remarkGfm]}
-                                      components={{
-                                          a: ({ href, children }) => {
-                                            if (href && href.includes('google.com/maps/search')) {
-                                                const handleViewOnMap = (e: React.MouseEvent) => {
-                                                    e.preventDefault();
-                                                    handleLinkClick(href);
-                                                };
-                                
-                                                const handleDirections = (e: React.MouseEvent) => {
-                                                    e.preventDefault();
-                                                    try {
-                                                        const url = new URL(href);
-                                                        const placeId = url.searchParams.get('query_place_id');
-                                                        const query = url.searchParams.get('query');
-                                                        let directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query || '')}`;
-                                                        if (placeId) {
-                                                            directionsUrl += `&destination_place_id=${placeId}`;
-                                                        }
-                                                        window.open(directionsUrl, '_blank', 'noopener,noreferrer');
-                                                    } catch (error) {
-                                                        console.error('Error creating directions URL:', error);
-                                                        window.open(href, '_blank', 'noopener,noreferrer');
-                                                    }
-                                                };
-                                
-                                                return (
-                                                    <span className="inline-flex flex-col items-start">
-                                                        {children}
-                                                        <span className="flex items-center gap-2 mt-1.5">
-                                                            <button
-                                                                onClick={handleViewOnMap}
-                                                                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-full transition-colors"
-                                                            >
-                                                                <MapIcon className="!text-sm" /> View on Map
-                                                            </button>
-                                                            <button
-                                                                onClick={handleDirections}
-                                                                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-full transition-colors"
-                                                            >
-                                                                <DirectionsIcon className="!text-sm" /> Directions
-                                                            </button>
-                                                        </span>
-                                                    </span>
-                                                );
-                                            }
+                    {history.map((msg, index) => {
+                        const isLastMessage = index === history.length - 1;
+                        const showTypingIndicator = msg.role === 'model' && isLoading && isLastMessage && msg.text === '';
+
+                        return (
+                            <div key={index} className={`flex items-start gap-3 my-4 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                                {msg.role === 'model' && (
+                                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200">
+                                      <BotIcon/>
+                                    </div>
+                                )}
+                                <div className={`max-w-xs md:max-w-sm px-4 py-2.5 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none'}`}>
+                                    {showTypingIndicator ? (
+                                        <div className="flex items-center">
+                                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s] mx-1"></div>
+                                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                        </div>
+                                    ) : (
+                                        <div className="prose prose-base max-w-none prose-a:text-blue-600 hover:prose-a:underline">
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]}
+                                                components={{
+                                                    a: ({ href, children }) => {
+                                                        if (href && href.includes('google.com/maps/search')) {
+                                                            const handleViewOnMap = (e: React.MouseEvent) => {
+                                                                e.preventDefault();
+                                                                handleLinkClick(href);
+                                                            };
                                             
-                                            return (
-                                                <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1">
-                                                    {children} <ExternalLinkIcon />
-                                                </a>
-                                            );
-                                          },
-                                          p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>
-                                      }}
-                                  >
-                                      {msg.text}
-                                  </ReactMarkdown>
+                                                            const handleDirections = (e: React.MouseEvent) => {
+                                                                e.preventDefault();
+                                                                try {
+                                                                    const url = new URL(href);
+                                                                    const placeId = url.searchParams.get('query_place_id');
+                                                                    const query = url.searchParams.get('query');
+                                                                    let directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query || '')}`;
+                                                                    if (placeId) {
+                                                                        directionsUrl += `&destination_place_id=${placeId}`;
+                                                                    }
+                                                                    window.open(directionsUrl, '_blank', 'noopener,noreferrer');
+                                                                } catch (error) {
+                                                                    console.error('Error creating directions URL:', error);
+                                                                    window.open(href, '_blank', 'noopener,noreferrer');
+                                                                }
+                                                            };
+
+                                                            const isCopied = copiedLink === href;
+                                            
+                                                            return (
+                                                                <span className="inline-flex flex-col items-start">
+                                                                    {children}
+                                                                    <span className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                                                        <button
+                                                                            onClick={handleViewOnMap}
+                                                                            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-full transition-colors"
+                                                                        >
+                                                                            <MapIcon className="!text-base" /> View on Map
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={handleDirections}
+                                                                            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-full transition-colors"
+                                                                        >
+                                                                            <DirectionsIcon className="!text-base" /> Directions
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleCopyLink(href)}
+                                                                            className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-full px-2.5 py-1.5 transition-colors ${
+                                                                                isCopied
+                                                                                    ? 'text-green-700 bg-green-100 cursor-default'
+                                                                                    : 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+                                                                            }`}
+                                                                            disabled={isCopied}
+                                                                        >
+                                                                            {isCopied ? (
+                                                                                <>
+                                                                                    <CheckIcon className="!text-base" /> Copied!
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <CopyIcon className="!text-base" /> Copy Link
+                                                                                </>
+                                                                            )}
+                                                                        </button>
+                                                                    </span>
+                                                                </span>
+                                                            );
+                                                        }
+                                                        
+                                                        return (
+                                                            <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1">
+                                                                {children} <ExternalLinkIcon />
+                                                            </a>
+                                                        );
+                                                    },
+                                                    p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>
+                                                }}
+                                            >
+                                                {msg.text}
+                                            </ReactMarkdown>
+                                        </div>
+                                    )}
                                 </div>
+                                {msg.role === 'user' && (
+                                    <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center flex-shrink-0">
+                                       <UserIcon />
+                                    </div>
+                                )}
                             </div>
-                            {msg.role === 'user' && (
-                                <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center flex-shrink-0">
-                                   <UserIcon />
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                    {isLoading && (
-                         <div className="flex items-start gap-3 my-4">
-                             <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200">
-                                 <BotIcon/>
-                             </div>
-                             <div className="max-w-xs md:max-w-sm px-4 py-2 rounded-2xl bg-white text-gray-800 rounded-bl-none flex items-center">
-                                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s] mx-1"></div>
-                                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                             </div>
-                         </div>
-                    )}
+                        )
+                    })}
                 </div>
 
                 <footer className="p-3 border-t border-gray-200 bg-white rounded-b-none md:rounded-b-2xl">
@@ -227,13 +258,13 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                             onChange={(e) => setInput(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
                             placeholder="Ask about places in London..."
-                            className="w-full py-2.5 pl-4 pr-12 bg-gray-100 border-2 border-gray-200 text-gray-900 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-500"
+                            className="w-full text-base py-3 pl-4 pr-12 bg-gray-100 border-2 border-gray-200 text-gray-900 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-500"
                             disabled={isLoading}
                         />
                         <button
                             onClick={handleSend}
                             disabled={isLoading || !input.trim()}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 text-white rounded-full p-2 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 text-white rounded-full p-2.5 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                             aria-label="Send message"
                         >
                             <SendIcon />

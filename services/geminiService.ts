@@ -11,28 +11,38 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 export const findMeetingPoints = async (
     locationA: string, 
     locationB: string,
-    userCoords: { latitude: number; longitude: number; } | null
+    userCoords: { latitude: number; longitude: number; } | null,
+    transitPreferences: string[]
 ): Promise<{ venues: Venue[], groundingChunks: GroundingChunk[] } | null> => {
   const prompt = `
-    As a London transit expert, find 3-5 public meeting points in London (like cafes, pubs, parks, or museums) that are optimally located for two people traveling from different locations.
+    As an expert London travel planner, your task is to find 3-5 ideal public meeting points in London for two people. The "best" meeting point is not just about equal travel time, but a nuanced balance of total journey duration, convenience, and user preferences.
 
-    Person A Location: "${locationA}"
-    Person B Location: "${locationB}"
+    **User Inputs:**
+    *   Person A Start: "${locationA}"
+    *   Person B Start: "${locationB}"
+    *   Preferred Transit Modes: ${transitPreferences.length > 0 ? transitPreferences.join(', ') : 'All modes are acceptable'}.
 
-    Your goal is to find venues where the public transport travel time from both starting locations is as close to equal as possible.
+    **Your Calculation Must Consider These Factors:**
 
-    **Crucially, incorporate real-time Transport for London (TfL) data into your reasoning.** Consider current and typical service disruptions, line closures (especially on weekends), and delays. For each suggested venue, provide a note about any relevant TfL considerations that might affect the journey.
+    1.  **Total Journey Time (Crucial):** This includes both the time on public transport AND the walking time from the final station/stop to the venue's entrance. Aim for venues with minimal walking time (ideally under 10 minutes) unless it's a park.
+    2.  **Travel Fairness (Nuanced Score):**
+        *   Calculate the total journey time for both Person A and Person B.
+        *   The primary goal is to minimize the *difference* in their total journey times.
+        *   Incorporate the user's **Preferred Transit Modes**. A route that uses preferred modes might be considered better, even if it adds a few minutes to the total journey, as it improves the travel experience.
+    3.  **TfL Real-time Data:** Use your knowledge of the TfL network, including typical service patterns, potential disruptions, weekend closures, and peak-hour congestion to assess route reliability.
+    4.  **Venue Quality:** Suggest diverse, well-regarded venues (cafes, pubs, museums, parks) suitable for meeting.
 
-    Prioritize locations with good, reliable transport links. The suggestions should be diverse.
-
-    Respond ONLY with a valid JSON object in the following format. Do not include any other text, explanations, or markdown formatting.
+    **Response Format:**
+    Respond ONLY with a valid JSON object. Do not include any other text, explanations, or markdown formatting. The \`fairness\` description should now be more detailed, explaining *why* a location is fair by mentioning total travel time, walking distance, and adherence to transit preferences.
     {
       "venues": [
         {
           "name": "The name of the venue.",
           "type": "The type of venue (e.g., Cafe, Pub, Park, Museum).",
           "description": "A brief, one-sentence description of the venue and why it's a good meeting spot.",
-          "fairness": "A comment on how fair the travel time is from both locations, e.g., 'Almost equal travel time', 'Slightly shorter for person A'.",
+          "fairness": "A detailed comment on fairness. Example: 'Excellent fairness. Total travel time is nearly identical (approx. 35-40 mins each), with a short 5-minute walk from the station. The route relies on the Tube, aligning with user preferences.'",
+          "rating": 4.5,
+          "opening_hours": "A string indicating current opening hours, e.g., 'Open ⋅ Closes 11PM' or 'Closed'.",
           "location": {
             "latitude": 51.5074,
             "longitude": -0.1278

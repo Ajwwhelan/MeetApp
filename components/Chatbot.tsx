@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Chat } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
@@ -90,16 +91,24 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
     };
     
     const handleLinkClick = (href: string) => {
+        const apiKey = process.env.API_KEY;
         try {
             const url = new URL(href);
-            if (url.hostname.includes('google.com') && url.pathname.includes('/maps/search')) {
+            if (url.hostname.includes('google.com') && url.pathname.includes('/maps/search') && apiKey) {
                 const query = url.searchParams.get('query');
+                const placeId = url.searchParams.get('query_place_id');
 
-                if (query) {
-                    const embedUrl = `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
+                let embedUrl = '';
+                if (placeId) {
+                    embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=place_id:${placeId}`;
+                } else if (query) {
+                    embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(query)}`;
+                }
+
+                if (embedUrl) {
                     setMapUrl(embedUrl);
                 } else {
-                    window.open(href, '_blank', 'noopener,noreferrer');
+                     window.open(href, '_blank', 'noopener,noreferrer');
                 }
             } else {
                 window.open(href, '_blank', 'noopener,noreferrer');
@@ -118,6 +127,45 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
             console.error('Failed to copy link:', err);
         });
     };
+    
+    const handleDirectionsClick = (href: string) => {
+        const apiKey = process.env.API_KEY;
+        try {
+            const url = new URL(href);
+            const placeId = url.searchParams.get('query_place_id');
+            const query = url.searchParams.get('query');
+            
+            if (apiKey && (placeId || query)) {
+                 // If we have a place ID, use it for destination. Otherwise use query.
+                 // We need an origin for Directions Embed. We can default to "London" or just open the map in place mode if generic.
+                 // However, for directions, better to just show the place mode and let user click Directions inside the embed if origin is unknown.
+                 // BUT, the prompt implies we want directions in app.
+                 // Let's assume the user wants to find directions *to* this place.
+                 // Without a known user location here easily, we might default origin to empty or a generic prompt.
+                 // Actually, the embed API *requires* origin.
+                 // Let's use 'London, UK' as a default origin placeholder or just use Place mode which is safer if we don't know origin.
+                 // If we use Place mode, the 'Directions' button in Google Maps embed will pop out.
+                 // Let's stick to Place mode for simplicity in Chat unless we want to complexify.
+                 // Wait, ChatbotProps has `userCoords`.
+                 
+                 let destination = '';
+                 if (placeId) destination = `place_id:${placeId}`;
+                 else if (query) destination = encodeURIComponent(query);
+                 
+                 let origin = 'London, UK';
+                 if (userCoords) {
+                     origin = `${userCoords.latitude},${userCoords.longitude}`;
+                 }
+                 
+                 const embedUrl = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${encodeURIComponent(origin)}&destination=${destination}&mode=transit`;
+                 setMapUrl(embedUrl);
+            } else {
+                 window.open(href, '_blank', 'noopener,noreferrer');
+            }
+        } catch (error) {
+             window.open(href, '_blank', 'noopener,noreferrer');
+        }
+    }
 
 
     if (!isOpen) return null;
@@ -169,19 +217,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                             
                                                             const handleDirections = (e: React.MouseEvent) => {
                                                                 e.preventDefault();
-                                                                try {
-                                                                    const url = new URL(href);
-                                                                    const placeId = url.searchParams.get('query_place_id');
-                                                                    const query = url.searchParams.get('query');
-                                                                    let directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query || '')}`;
-                                                                    if (placeId) {
-                                                                        directionsUrl += `&destination_place_id=${placeId}`;
-                                                                    }
-                                                                    window.open(directionsUrl, '_blank', 'noopener,noreferrer');
-                                                                } catch (error) {
-                                                                    console.error('Error creating directions URL:', error);
-                                                                    window.open(href, '_blank', 'noopener,noreferrer');
-                                                                }
+                                                                handleDirectionsClick(href);
                                                             };
 
                                                             const isCopied = copiedLink === href;

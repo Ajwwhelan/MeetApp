@@ -23,15 +23,27 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
     const [history, setHistory] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [mapUrl, setMapUrl] = useState<string | null>(null);
+    const [mapModalData, setMapModalData] = useState<{url: string, title?: string} | null>(null);
     const [copiedLink, setCopiedLink] = useState<string | null>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
     const initChat = useCallback(() => {
+        const baseInstruction = "You are a helpful assistant for the MeetApp London app. You specialize in London locations, transit, and culture. When a user asks for a list of places (e.g., restaurants, pubs, museums), you MUST format your response as a markdown-numbered list. For each item, you MUST prepend the venue name with a relevant emoji representing the venue type (e.g., ☕ for a cafe, 🍽️ for a restaurant, 🍺 for a pub, 🌳 for a park, 🏛️ for a museum). The venue name must be a **bolded markdown link** to its Google Maps location. Add a brief, single-paragraph description on a new line below the name. **Crucially, ensure there is a blank line separating each numbered item for readability.**\n\nThe link MUST be a full `https://www.google.com/maps/search/?api=1&query=...` URL. Do not use shortened URLs or links to other websites.";
+        
+        const example = "\n\nHere is a perfect example:\n\n1. ☕ [**The Folly**](https://www.google.com/maps/search/?api=1&query=The+Folly&query_place_id=ChIJc-Q3jA8bdkgR1lQwn_L0a4I)\nA garden-influenced restaurant and bar with a seasonal menu.\n\n2. 🍽️ [**Caravan City**](https://www.google.com/maps/search/?api=1&query=Caravan+City&query_place_id=ChIJiQUg_QcbdkgRj8d-2d_e8cI)\nEclectic global cooking in an industrial chic setting.";
+
+        let systemInstruction = baseInstruction;
+        
+        if (userCoords) {
+            systemInstruction += `\n\nCONTEXT: The user is currently located at Latitude: ${userCoords.latitude}, Longitude: ${userCoords.longitude}. Use this location to provide relevant distance estimates, walking directions advice, and "near me" recommendations within London.`;
+        }
+        
+        systemInstruction += example;
+
         const newChat = ai.chats.create({
             model: 'gemini-2.5-flash',
             config: {
-                systemInstruction: "You are a helpful assistant for the MeetApp London app. You specialize in London locations, transit, and culture. When a user asks for a list of places (e.g., restaurants, pubs, museums), you MUST format your response as a markdown-numbered list. For each item, you MUST prepend the venue name with a relevant emoji representing the venue type (e.g., ☕ for a cafe, 🍽️ for a restaurant, 🍺 for a pub, 🌳 for a park, 🏛️ for a museum). The venue name must be a **bolded markdown link** to its Google Maps location. Add a brief, single-paragraph description on a new line below the name. **Crucially, ensure there is a blank line separating each numbered item for readability.**\n\nThe link MUST be a full `https://www.google.com/maps/search/?api=1&query=...` URL. Do not use shortened URLs or links to other websites.\n\nHere is a perfect example:\n\n1. ☕ [**The Folly**](https://www.google.com/maps/search/?api=1&query=The+Folly&query_place_id=ChIJc-Q3jA8bdkgR1lQwn_L0a4I)\nA garden-influenced restaurant and bar with a seasonal menu.\n\n2. 🍽️ [**Caravan City**](https://www.google.com/maps/search/?api=1&query=Caravan+City&query_place_id=ChIJiQUg_QcbdkgRj8d-2d_e8cI)\nEclectic global cooking in an industrial chic setting.",
+                systemInstruction: systemInstruction,
                 tools: [{ googleMaps: {} }],
                 toolConfig: userCoords ? {
                   retrievalConfig: {
@@ -90,23 +102,43 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
         }
     };
     
-    const handleLinkClick = (href: string) => {
+    const handleLinkClick = (href: string, linkText?: string) => {
         const apiKey = process.env.API_KEY;
         try {
             const url = new URL(href);
-            if (url.hostname.includes('google.com') && url.pathname.includes('/maps/search') && apiKey) {
-                const query = url.searchParams.get('query');
-                const placeId = url.searchParams.get('query_place_id');
-
+            const isSearch = url.pathname.includes('/maps/search');
+            const isDir = url.pathname.includes('/maps/dir');
+            
+            if ((isSearch || isDir) && apiKey) {
                 let embedUrl = '';
-                if (placeId) {
-                    embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=place_id:${placeId}`;
-                } else if (query) {
-                    embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(query)}`;
+                let title = linkText || 'Map View';
+
+                if (isSearch) {
+                    const query = url.searchParams.get('query');
+                    const placeId = url.searchParams.get('query_place_id');
+                    
+                    // Fallback title if linkText is not provided/useful
+                    if ((!title || title === 'Map View') && query) {
+                        title = query;
+                    }
+
+                    if (placeId) {
+                        embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=place_id:${placeId}`;
+                    } else if (query) {
+                        embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(query)}`;
+                    }
+                } else if (isDir) {
+                     const destination = url.searchParams.get('destination') || url.searchParams.get('daddr') || 'Destination';
+                     const origin = url.searchParams.get('origin') || url.searchParams.get('saddr') || 'London, UK';
+                     title = `Directions to ${destination}`;
+
+                     if (destination) {
+                         embedUrl = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=transit`;
+                     }
                 }
 
                 if (embedUrl) {
-                    setMapUrl(embedUrl);
+                    setMapModalData({ url: embedUrl, title });
                 } else {
                      window.open(href, '_blank', 'noopener,noreferrer');
                 }
@@ -136,21 +168,15 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
             const query = url.searchParams.get('query');
             
             if (apiKey && (placeId || query)) {
-                 // If we have a place ID, use it for destination. Otherwise use query.
-                 // We need an origin for Directions Embed. We can default to "London" or just open the map in place mode if generic.
-                 // However, for directions, better to just show the place mode and let user click Directions inside the embed if origin is unknown.
-                 // BUT, the prompt implies we want directions in app.
-                 // Let's assume the user wants to find directions *to* this place.
-                 // Without a known user location here easily, we might default origin to empty or a generic prompt.
-                 // Actually, the embed API *requires* origin.
-                 // Let's use 'London, UK' as a default origin placeholder or just use Place mode which is safer if we don't know origin.
-                 // If we use Place mode, the 'Directions' button in Google Maps embed will pop out.
-                 // Let's stick to Place mode for simplicity in Chat unless we want to complexify.
-                 // Wait, ChatbotProps has `userCoords`.
-                 
                  let destination = '';
-                 if (placeId) destination = `place_id:${placeId}`;
-                 else if (query) destination = encodeURIComponent(query);
+                 let titleName = '';
+                 if (placeId) {
+                     destination = `place_id:${placeId}`;
+                     titleName = 'Selected Location';
+                 } else if (query) {
+                     destination = encodeURIComponent(query);
+                     titleName = query;
+                 }
                  
                  let origin = 'London, UK';
                  if (userCoords) {
@@ -158,7 +184,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                  }
                  
                  const embedUrl = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${encodeURIComponent(origin)}&destination=${destination}&mode=transit`;
-                 setMapUrl(embedUrl);
+                 setMapModalData({ url: embedUrl, title: `Directions to ${titleName}` });
             } else {
                  window.open(href, '_blank', 'noopener,noreferrer');
             }
@@ -209,7 +235,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                                 remarkPlugins={[remarkGfm]}
                                                 components={{
                                                     a: ({ href, children }) => {
-                                                        if (href && href.includes('google.com/maps/search')) {
+                                                        if (href && (href.includes('google.com/maps/search') || href.includes('google.com/maps/dir'))) {
                                                             const handleViewOnMap = (e: React.MouseEvent) => {
                                                                 e.preventDefault();
                                                                 handleLinkClick(href);
@@ -224,36 +250,42 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                             
                                                             return (
                                                                 <span className="inline-flex flex-col items-start">
-                                                                    {children}
-                                                                    <span className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                                                    <a 
+                                                                        href={href} 
+                                                                        onClick={handleViewOnMap}
+                                                                        className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline cursor-pointer text-[1.05em]"
+                                                                    >
+                                                                        {children} <ExternalLinkIcon className="w-3 h-3 opacity-50" />
+                                                                    </a>
+                                                                    <span className="flex items-center gap-2 mt-2 flex-wrap">
                                                                         <button
                                                                             onClick={handleViewOnMap}
-                                                                            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-full transition-colors"
+                                                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-full transition-colors border border-blue-100"
                                                                         >
-                                                                            <MapIcon className="!text-base" /> View on Map
+                                                                            <MapIcon className="!w-3.5 !h-3.5" /> Map
                                                                         </button>
                                                                         <button
                                                                             onClick={handleDirections}
-                                                                            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-full transition-colors"
+                                                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-full transition-colors border border-blue-100"
                                                                         >
-                                                                            <DirectionsIcon className="!text-base" /> Directions
+                                                                            <DirectionsIcon className="!w-3.5 !h-3.5" /> Directions
                                                                         </button>
                                                                         <button
                                                                             onClick={() => handleCopyLink(href)}
-                                                                            className={`inline-flex items-center gap-1.5 text-sm font-medium rounded-full px-2.5 py-1.5 transition-colors ${
+                                                                            className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1.5 transition-colors border ${
                                                                                 isCopied
-                                                                                    ? 'text-green-700 bg-green-100 cursor-default'
-                                                                                    : 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+                                                                                    ? 'text-green-700 bg-green-100 border-green-200 cursor-default'
+                                                                                    : 'text-gray-500 bg-gray-50 hover:bg-gray-100 border-gray-200'
                                                                             }`}
                                                                             disabled={isCopied}
                                                                         >
                                                                             {isCopied ? (
                                                                                 <>
-                                                                                    <CheckIcon className="!text-base" /> Copied!
+                                                                                    <CheckIcon className="!w-3.5 !h-3.5" />
                                                                                 </>
                                                                             ) : (
                                                                                 <>
-                                                                                    <CopyIcon className="!text-base" /> Copy Link
+                                                                                    <CopyIcon className="!w-3.5 !h-3.5" />
                                                                                 </>
                                                                             )}
                                                                         </button>
@@ -268,7 +300,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                                             </a>
                                                         );
                                                     },
-                                                    p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>
+                                                    p: ({children}) => <p className="mb-3 last:mb-0">{children}</p>
                                                 }}
                                             >
                                                 {msg.text}
@@ -308,7 +340,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                     </div>
                 </footer>
             </div>
-            {mapUrl && <MapModal url={mapUrl} onClose={() => setMapUrl(null)} />}
+            {mapModalData && <MapModal url={mapModalData.url} title={mapModalData.title} onClose={() => setMapModalData(null)} />}
         </>
     );
 };

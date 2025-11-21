@@ -4,6 +4,7 @@ export interface Venue {
   type: string;
   description: string;
   fairness: string;
+  fairness_score?: number;
   location: {
     latitude: number;
     longitude: number;

@@ -183,22 +183,19 @@ const App: React.FC = () => {
     let title = venue.name;
 
     if (mode === 'directions') {
-        let origin = locationA;
-        
-        // If origin is "My Current Location" (case-insensitive), try to use coordinates
-        if ((origin.toLowerCase() === 'my current location' || !origin) && userCoords) {
+        let origin = '';
+
+        // 1. Prioritize user coordinates if available
+        if (userCoords) {
             origin = `${userCoords.latitude},${userCoords.longitude}`;
-        } else if (origin.toLowerCase() === 'my current location' && !userCoords) {
-            // Fallback if we have "My Current Location" text but no coordinates
-            // We cannot give directions from a string "My Current Location" securely in embed
-            // Fallback to just showing the place to avoid blank screen
-            alert("We couldn't access your location for directions. Showing venue map instead.");
-            url = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=place_id:${venue.place_id}`;
-            setMapModalData({ url, title });
-            return;
-        } else if (!origin) {
-            // If empty origin and no coords, default to London center to avoid blank map
-            origin = 'London, UK';
+        } 
+        // 2. Use input location A if it's not the generic "My Current Location" string without coords
+        else if (locationA && locationA.trim() !== '' && locationA.toLowerCase() !== 'my current location') {
+            origin = locationA;
+        }
+        // 3. Fallback to Central London (Charing Cross) if no specific location is available
+        else {
+            origin = 'Charing Cross, London, UK';
         }
 
         url = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${encodeURIComponent(origin)}&destination=place_id:${venue.place_id}&mode=transit`;

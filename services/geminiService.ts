@@ -41,6 +41,7 @@ export const findMeetingPoints = async (
           "type": "The type of venue (e.g., Cafe, Pub, Park, Museum).",
           "description": "A brief, one-sentence description of the venue and why it's a good meeting spot.",
           "fairness": "A detailed comment on fairness. Example: 'Excellent fairness. Total travel time is nearly identical (approx. 35-40 mins each), with a short 5-minute walk from the station. The route relies on the Tube, aligning with user preferences.'",
+          "fairness_score": 9,
           "rating": 4.5,
           "opening_hours": "A string indicating current opening hours, e.g., 'Open ⋅ Closes 11PM' or 'Closed'.",
           "location": {

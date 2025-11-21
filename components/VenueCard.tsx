@@ -65,6 +65,18 @@ const VenueCard: React.FC<VenueCardProps> = ({ venue, onSave, onRemove, isSaved,
     if (lowerType.includes('restaurant') || lowerType.includes('food')) return <RestaurantIcon className={className} />;
     return <PlaceIcon className={className} />;
   };
+  
+  const getFairnessColor = (score: number) => {
+      if (score >= 8) return 'bg-green-500';
+      if (score >= 5) return 'bg-amber-500';
+      return 'bg-red-500';
+  };
+  
+  const getFairnessLabel = (score: number) => {
+      if (score >= 8) return 'High Fairness';
+      if (score >= 5) return 'Medium Fairness';
+      return 'Low Fairness';
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden h-full transform transition-all hover:shadow-md hover:-translate-y-1 flex flex-col border border-gray-200 group">
@@ -106,10 +118,27 @@ const VenueCard: React.FC<VenueCardProps> = ({ venue, onSave, onRemove, isSaved,
                 <InfoIcon className="w-4 h-4 text-gray-400 mt-0.5" />
                 <span className="leading-relaxed">{venue.description}</span>
             </p>
-             <p className="text-gray-900 font-medium flex items-center gap-2.5 bg-blue-50 p-2 rounded-lg border border-blue-100">
-                <StarIcon className="w-4 h-4 text-blue-500" />
-                <span className="text-sm">{venue.fairness}</span>
-            </p>
+            
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                {venue.fairness_score !== undefined && (
+                    <div className="mb-2">
+                        <div className="flex justify-between items-end mb-1">
+                            <span className="text-xs font-bold text-blue-800 uppercase tracking-wider">Fairness Score</span>
+                            <span className="text-xs font-medium text-blue-600">{venue.fairness_score}/10</span>
+                        </div>
+                        <div className="h-2 w-full bg-blue-100 rounded-full overflow-hidden">
+                            <div 
+                                className={`h-full rounded-full ${getFairnessColor(venue.fairness_score)}`} 
+                                style={{ width: `${venue.fairness_score * 10}%` }}
+                            ></div>
+                        </div>
+                    </div>
+                )}
+                <p className="flex items-start gap-2.5">
+                    <span className="text-sm text-gray-700">{venue.fairness}</span>
+                </p>
+            </div>
+
             {venue.opening_hours && (
                 <p className="flex items-start gap-2.5">
                     <ClockIcon className="w-4 h-4 text-gray-400 mt-0.5" />

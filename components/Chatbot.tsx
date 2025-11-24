@@ -103,29 +103,27 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
     };
     
     const handleLinkClick = (href: string, linkText?: string) => {
-        const apiKey = process.env.API_KEY;
         try {
             const url = new URL(href);
             const isSearch = url.pathname.includes('/maps/search');
             const isDir = url.pathname.includes('/maps/dir');
             
-            if ((isSearch || isDir) && apiKey) {
+            // We use the legacy embed URL format to avoid "Invalid API Key" errors 
+            // that occur when the GenAI key doesn't have Maps Embed API enabled.
+            if (isSearch || isDir) {
                 let embedUrl = '';
                 let title = linkText || 'Map View';
 
                 if (isSearch) {
                     const query = url.searchParams.get('query');
-                    const placeId = url.searchParams.get('query_place_id');
                     
                     // Fallback title if linkText is not provided/useful
                     if ((!title || title === 'Map View') && query) {
                         title = query;
                     }
 
-                    if (placeId) {
-                        embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=place_id:${placeId}`;
-                    } else if (query) {
-                        embedUrl = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(query)}`;
+                    if (query) {
+                        embedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(query)}&z=15&output=embed`;
                     }
                 } else if (isDir) {
                      const destination = url.searchParams.get('destination') || url.searchParams.get('daddr') || 'Destination';
@@ -133,7 +131,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                      title = `Directions to ${destination}`;
 
                      if (destination) {
-                         embedUrl = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=transit`;
+                         embedUrl = `https://maps.google.com/maps?saddr=${encodeURIComponent(origin)}&daddr=${encodeURIComponent(destination)}&output=embed`;
                      }
                 }
 
@@ -161,29 +159,20 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
     };
     
     const handleDirectionsClick = (href: string) => {
-        const apiKey = process.env.API_KEY;
         try {
             const url = new URL(href);
-            const placeId = url.searchParams.get('query_place_id');
             const query = url.searchParams.get('query');
             
-            if (apiKey && (placeId || query)) {
-                 let destination = '';
-                 let titleName = '';
-                 if (placeId) {
-                     destination = `place_id:${placeId}`;
-                     titleName = 'Selected Location';
-                 } else if (query) {
-                     destination = encodeURIComponent(query);
-                     titleName = query;
-                 }
+            if (query) {
+                 let destination = encodeURIComponent(query);
+                 let titleName = query;
                  
                  let origin = 'London, UK';
                  if (userCoords) {
                      origin = `${userCoords.latitude},${userCoords.longitude}`;
                  }
                  
-                 const embedUrl = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${encodeURIComponent(origin)}&destination=${destination}&mode=transit`;
+                 const embedUrl = `https://maps.google.com/maps?saddr=${encodeURIComponent(origin)}&daddr=${destination}&output=embed`;
                  setMapModalData({ url: embedUrl, title: `Directions to ${titleName}` });
             } else {
                  window.open(href, '_blank', 'noopener,noreferrer');
@@ -238,7 +227,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                                         if (href && (href.includes('google.com/maps/search') || href.includes('google.com/maps/dir'))) {
                                                             const handleViewOnMap = (e: React.MouseEvent) => {
                                                                 e.preventDefault();
-                                                                handleLinkClick(href);
+                                                                handleLinkClick(href, typeof children === 'string' ? children : undefined);
                                                             };
                                             
                                                             const handleDirections = (e: React.MouseEvent) => {

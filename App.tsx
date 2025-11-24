@@ -173,12 +173,8 @@ const App: React.FC = () => {
   }, [locationA, locationB, userCoords, transitPreferences]);
 
   const handleViewOnMap = useCallback((venue: Venue, mode: 'place' | 'directions' = 'place') => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      console.error("API Key missing for map embed");
-      return;
-    }
-
+    // Using legacy embed format to ensure maps work without a dedicated Embed API key, 
+    // while still keeping the user inside the application.
     let url = '';
     let title = venue.name;
 
@@ -198,10 +194,12 @@ const App: React.FC = () => {
             origin = 'Charing Cross, London, UK';
         }
 
-        url = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${encodeURIComponent(origin)}&destination=place_id:${venue.place_id}&mode=transit`;
+        // Use legacy Google Maps embed format for directions
+        url = `https://maps.google.com/maps?saddr=${encodeURIComponent(origin)}&daddr=${venue.location.latitude},${venue.location.longitude}&output=embed`;
         title = `Directions to ${venue.name}`;
     } else {
-        url = `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=place_id:${venue.place_id}`;
+        // Use legacy Google Maps embed format for place view
+        url = `https://maps.google.com/maps?q=${venue.location.latitude},${venue.location.longitude}&z=15&output=embed`;
         title = venue.name;
     }
     

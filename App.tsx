@@ -206,6 +206,13 @@ const App: React.FC = () => {
     setMapModalData({ url, title });
   }, [locationA, userCoords]);
   
+  const handleGroundingLinkClick = (e: React.MouseEvent, uri: string, title: string) => {
+    e.preventDefault();
+    // Using title for search is robust enough for legacy embed
+    const embedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(title)}&z=15&output=embed`;
+    setMapModalData({ url: embedUrl, title });
+  };
+
   const handleShareResults = useCallback(async () => {
     if (venues.length === 0) return;
 
@@ -431,7 +438,11 @@ const App: React.FC = () => {
                               {groundingChunks.map((chunk, index) => (
                                 chunk.maps?.uri && (
                                   <li key={index}>
-                                    <a href={chunk.maps.uri} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 hover:underline truncate block max-w-xs md:max-w-md">
+                                    <a 
+                                        href={chunk.maps.uri} 
+                                        onClick={(e) => handleGroundingLinkClick(e, chunk.maps.uri, chunk.maps.title)}
+                                        className="hover:text-blue-600 hover:underline truncate block max-w-xs md:max-w-md cursor-pointer"
+                                    >
                                       {chunk.maps.title}
                                     </a>
                                   </li>

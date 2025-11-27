@@ -19,6 +19,8 @@ export interface Venue {
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+  // Optional property to track if the message is part of a live session
+  isLive?: boolean;
 }
 
 export interface MapsChunk {

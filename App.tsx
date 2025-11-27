@@ -173,32 +173,21 @@ const App: React.FC = () => {
   }, [locationA, locationB, userCoords, transitPreferences]);
 
   const handleViewOnMap = useCallback((venue: Venue, mode: 'place' | 'directions' = 'place') => {
-    // Using legacy embed format to ensure maps work without a dedicated Embed API key, 
-    // while still keeping the user inside the application.
     let url = '';
     let title = venue.name;
 
     if (mode === 'directions') {
         let origin = '';
-
-        // 1. Prioritize user coordinates if available
         if (userCoords) {
             origin = `${userCoords.latitude},${userCoords.longitude}`;
-        } 
-        // 2. Use input location A if it's not the generic "My Current Location" string without coords
-        else if (locationA && locationA.trim() !== '' && locationA.toLowerCase() !== 'my current location') {
+        } else if (locationA && locationA.trim() !== '' && locationA.toLowerCase() !== 'my current location') {
             origin = locationA;
-        }
-        // 3. Fallback to Central London (Charing Cross) if no specific location is available
-        else {
+        } else {
             origin = 'Charing Cross, London, UK';
         }
-
-        // Use legacy Google Maps embed format for directions
         url = `https://maps.google.com/maps?saddr=${encodeURIComponent(origin)}&daddr=${venue.location.latitude},${venue.location.longitude}&output=embed`;
         title = `Directions to ${venue.name}`;
     } else {
-        // Use legacy Google Maps embed format for place view
         url = `https://maps.google.com/maps?q=${venue.location.latitude},${venue.location.longitude}&z=15&output=embed`;
         title = venue.name;
     }
@@ -208,7 +197,6 @@ const App: React.FC = () => {
   
   const handleGroundingLinkClick = (e: React.MouseEvent, uri: string, title: string) => {
     e.preventDefault();
-    // Using title for search is robust enough for legacy embed
     const embedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(title)}&z=15&output=embed`;
     setMapModalData({ url: embedUrl, title });
   };
@@ -248,17 +236,16 @@ const App: React.FC = () => {
   }, [venues, locationA, locationB]);
 
   return (
-    <div className="min-h-screen bg-gray-100 text-gray-800 font-sans">
+    <div className="min-h-screen bg-[#FDFBFF] text-gray-800 font-sans">
       {showTutorial && <TutorialOverlay onClose={handleCloseTutorial} />}
       <div className="container mx-auto p-4 md:p-6 max-w-6xl">
-        <header className="w-full max-w-xl mx-auto bg-white rounded-2xl shadow-md p-6 md:p-8 border border-gray-100">
-            <h1 className="text-3xl md:text-4xl font-google-sans font-bold text-gray-900 text-center mb-2">
+        <header className="w-full max-w-xl mx-auto bg-blue-50/50 rounded-[28px] p-6 md:p-8 mb-8">
+            <h1 className="text-4xl font-google-sans font-medium text-gray-900 text-center mb-2 tracking-tight">
               MeetApp London
             </h1>
-            <p className="text-gray-500 text-center mb-8">Find the fairest meeting point by public transport.</p>
+            <p className="text-gray-500 text-center mb-8 text-base">Find the fairest meeting point by public transport.</p>
 
             <div className="relative space-y-0">
-              {/* Connector Line for visual flow */}
               <div className="absolute left-7 top-12 bottom-12 w-0.5 bg-gray-300 border-l-2 border-dotted border-gray-300 z-0 hidden md:block" style={{left: '1.8rem'}}></div>
               
               <div className="relative z-10 space-y-4">
@@ -282,8 +269,8 @@ const App: React.FC = () => {
             </div>
 
             <div className="mt-8">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 text-center">Transport Modes</h3>
-                <div className="flex flex-wrap justify-center gap-3">
+                <h3 className="text-sm font-medium text-gray-500 mb-3 text-center">Transport Modes</h3>
+                <div className="flex flex-wrap justify-center gap-2">
                   {availableTransitModes.map(mode => {
                     const isSelected = transitPreferences.includes(mode);
                     return (
@@ -291,13 +278,13 @@ const App: React.FC = () => {
                         key={mode}
                         onClick={() => handlePreferenceChange(mode)}
                         aria-pressed={isSelected}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-full border transition-all duration-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 text-sm font-medium border ${
                           isSelected 
-                            ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm ring-1 ring-blue-200' 
-                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                            ? 'bg-blue-100 text-blue-900 border-transparent hover:bg-blue-200' 
+                            : 'bg-transparent text-gray-700 border-gray-300 hover:bg-gray-100'
                         }`}
                       >
-                        <span className={isSelected ? 'text-blue-600' : 'text-gray-400'}>{transitModeIcons[mode]}</span>
+                        <span className={isSelected ? 'text-blue-900' : 'text-gray-500'}>{transitModeIcons[mode]}</span>
                         <span>{mode}</span>
                       </button>
                     );
@@ -309,7 +296,7 @@ const App: React.FC = () => {
               <button
                 onClick={handleFindMeetingPoint}
                 disabled={isLoading}
-                className="w-full bg-blue-600 text-white font-medium text-lg py-3.5 px-6 rounded-full hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all shadow-md hover:shadow-lg disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 text-white font-medium text-lg h-12 md:h-14 px-6 rounded-full hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all shadow-sm hover:shadow-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -328,12 +315,12 @@ const App: React.FC = () => {
 
         {savedVenues.length > 0 && (
           <section className="mt-10 max-w-5xl mx-auto">
-            <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-200">
+            <div className="bg-white rounded-[24px] shadow-sm p-6 border border-gray-100">
               <div className="flex items-center gap-3 mb-6">
-                <div className="flex-shrink-0 w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center">
+                <div className="flex-shrink-0 w-10 h-10 bg-blue-100 text-blue-900 rounded-full flex items-center justify-center">
                   <BookmarksIcon />
                 </div>
-                <h2 className="text-xl font-bold text-gray-800">Saved Places</h2>
+                <h2 className="text-xl font-medium text-gray-900">Saved Places</h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {savedVenues.map((venue, index) => (
@@ -350,12 +337,12 @@ const App: React.FC = () => {
           </section>
         )}
 
-        <main className="mt-8 pb-20">
+        <main className="mt-8 pb-28">
           {error && (
-            <div className="max-w-lg mx-auto bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl relative flex items-start gap-3 shadow-sm mb-8" role="alert">
+            <div className="max-w-lg mx-auto bg-red-50 border border-red-100 text-red-800 px-6 py-4 rounded-[20px] relative flex items-start gap-3 shadow-sm mb-8" role="alert">
               <ErrorIcon />
               <div>
-                <strong className="font-bold block mb-1">Unable to find places</strong>
+                <strong className="font-medium block mb-1">Unable to find places</strong>
                 <span className="text-sm">{error}</span>
               </div>
             </div>
@@ -370,11 +357,11 @@ const App: React.FC = () => {
           )}
 
           {hasSearched && !isLoading && venues.length === 0 && !error && (
-            <div className="max-w-lg mx-auto text-center py-12 px-4 bg-white rounded-2xl shadow-sm border border-gray-200">
+            <div className="max-w-lg mx-auto text-center py-12 px-4 bg-white rounded-[24px] shadow-sm border border-gray-100">
                 <div className="flex justify-center items-center mx-auto w-16 h-16 bg-gray-50 rounded-full mb-4">
                     <SearchIcon className="w-8 h-8 text-gray-400" />
                 </div>
-                <h2 className="text-xl font-bold text-gray-800 mb-2">No Meeting Points Found</h2>
+                <h2 className="text-xl font-medium text-gray-900 mb-2">No Meeting Points Found</h2>
                 <p className="text-gray-500">
                     We couldn't find any suitable spots halfway. Try adjusting your locations or enabling more transit modes.
                 </p>
@@ -384,7 +371,7 @@ const App: React.FC = () => {
           {venues.length > 0 && !isLoading && (
             <div className="max-w-5xl mx-auto">
               <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
-                <h2 className="text-2xl font-bold text-gray-800">Suggested Meeting Points</h2>
+                <h2 className="text-2xl font-normal text-gray-900">Suggested Meeting Points</h2>
                 <div className="flex items-center gap-2 self-end md:self-auto flex-wrap justify-end">
                   <VenueFilter 
                     types={venueTypes} 
@@ -393,9 +380,9 @@ const App: React.FC = () => {
                   />
                    <button
                       onClick={handleShareResults}
-                      className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-full transition-colors ${
                         shareConfirmation 
-                          ? 'bg-green-50 text-green-700 border border-green-200 cursor-default'
+                          ? 'bg-green-100 text-green-800 border-green-200 cursor-default'
                           : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                       }`}
                       aria-label="Share results"
@@ -424,7 +411,7 @@ const App: React.FC = () => {
                   })}
                 </div>
               ) : (
-                <div className="text-center py-12 px-4 bg-white rounded-xl shadow-sm border border-gray-200">
+                <div className="text-center py-12 px-4 bg-white rounded-[24px] shadow-sm border border-gray-100">
                     <p className="text-gray-600">No venues match the "<strong>{selectedVenueType}</strong>" filter.</p>
                 </div>
               )}
@@ -458,14 +445,17 @@ const App: React.FC = () => {
         </main>
       </div>
       
+      {/* FAB (Floating Action Button) - Material Design 3 Large FAB style */}
       <div className="fixed bottom-6 right-6 z-30">
           <button
               onClick={() => setIsChatOpen(!isChatOpen)}
-              className="group flex items-center gap-2 bg-blue-600 text-white rounded-full p-4 shadow-lg hover:bg-blue-700 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-500/30 transition-all transform hover:scale-105"
+              className="group flex items-center gap-2 bg-blue-100 text-blue-900 rounded-[20px] p-4 pr-6 shadow-md hover:shadow-lg hover:bg-blue-200 focus:outline-none focus:ring-4 focus:ring-blue-500/30 transition-all active:scale-95"
               aria-label="Open chatbot"
           >
-              <ChatIcon className="w-7 h-7" />
-              <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap font-medium pr-0 group-hover:pr-2">Ask Assistant</span>
+              <div className="w-8 h-8 flex items-center justify-center">
+                  <ChatIcon className="w-6 h-6" />
+              </div>
+              <span className="font-medium text-base">Ask Assistant</span>
           </button>
       </div>
 

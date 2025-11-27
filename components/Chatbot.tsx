@@ -4,7 +4,7 @@ import { GoogleGenAI, Chat, LiveServerMessage, Modality } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChatMessage } from '../types';
-import { CloseIcon, SendIcon, UserIcon, ExternalLinkIcon, BotIcon, DirectionsIcon, MapIcon, CopyIcon, CheckIcon, MicIcon, MicOffIcon, WaveformIcon, VolumeUpIcon, StopCircleIcon } from './icons';
+import { CloseIcon, SendIcon, UserIcon, ExternalLinkIcon, BotIcon, DirectionsIcon, MapIcon, CopyIcon, CheckIcon, MicIcon, MicOffIcon, WaveformIcon, VolumeUpIcon, StopCircleIcon, SparkleIcon } from './icons';
 import MapModal from './MapModal';
 
 if (!process.env.API_KEY) {
@@ -57,6 +57,7 @@ async function decodeAudioData(
     return buffer;
 }
 
+type VoiceStatus = 'inactive' | 'connecting' | 'listening' | 'thinking' | 'speaking';
 
 const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
     const [chat, setChat] = useState<Chat | null>(null);
@@ -69,7 +70,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
     
     // Live API State & Refs
     const [isLive, setIsLive] = useState(false);
-    const [isConnectingLive, setIsConnectingLive] = useState(false);
+    const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('inactive');
     const inputAudioContextRef = useRef<AudioContext | null>(null);
     const outputAudioContextRef = useRef<AudioContext | null>(null);
     const sessionPromiseRef = useRef<Promise<any> | null>(null);
@@ -81,6 +82,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
     const streamRef = useRef<MediaStream | null>(null);
     const currentInputTranscriptionRef = useRef('');
     const currentOutputTranscriptionRef = useRef('');
+    const [liveTranscript, setLiveTranscript] = useState<{user: string, model: string}>({user: '', model: ''});
 
     // Dictation & TTS State
     const [isDictating, setIsDictating] = useState(false);
@@ -95,12 +97,32 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
         let systemInstruction = baseInstruction;
         
         if (userCoords) {
-            systemInstruction += `\n\nCONTEXT: The user is currently located at Latitude: ${userCoords.latitude}, Longitude: ${userCoords.longitude}. Use this location to provide relevant distance estimates, walking directions advice, and "near me" recommendations within London.`;
+            systemInstruction += `\n\nCONTEXT: The user is currently located at Latitude: ${userCoords.latitude}, Longitude: ${userCoords.longitude}. NOTE: ONLY reference this location if the user explicitly asks for "near me", "nearby", or directions from their current spot. Otherwise, assume they are asking about the location specified in their query and do not mention their current coordinates.`;
         }
         
         systemInstruction += example;
         
         return systemInstruction;
+    }, [userCoords]);
+
+    // Specialized Prompt for Voice/Live Mode
+    const getLiveSystemInstruction = useCallback(() => {
+        let instruction = `You are a friendly, knowledgeable local guide for London, helping a user plan a meetup. 
+        
+        CRITICAL VOICE INSTRUCTIONS:
+        1. You are having a spoken conversation. Do NOT use markdown formatting (no bold, no italics, no links).
+        2. Do NOT use emojis. They are annoying when read aloud.
+        3. When asked for recommendations (e.g., "coffee shops in Balham"), ALWAYS provide 3 distinct options to give the user variety.
+        4. COMPLETE YOUR THOUGHTS. Do not stop in the middle of a sentence or list.
+        5. For each option, clearly state the name and a short, punchy reason why it's good (e.g., "First is The Folly, great for its garden vibe.").
+        6. Keep your total response concise (under 45 seconds).
+        7. Do NOT list addresses or read out long URLs.`;
+
+        if (userCoords) {
+            instruction += `\n\nUser Context: Latitude ${userCoords.latitude}, Longitude ${userCoords.longitude}. Use this for relative distance (e.g. "It's nearby") but do not read coordinates.`;
+        }
+
+        return instruction;
     }, [userCoords]);
 
     const startChatSession = useCallback(() => {
@@ -177,7 +199,6 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
         
         if (sessionPromiseRef.current) {
              sessionPromiseRef.current.then(session => {
-                 // Trying to close session if method exists or just ignore as connection is cut
                  try {
                      // @ts-ignore
                      if(typeof session.close === 'function') session.close();
@@ -187,13 +208,17 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
         }
         
         setIsLive(false);
-        setIsConnectingLive(false);
+        setVoiceStatus('inactive');
+        setLiveTranscript({user: '', model: ''});
+        currentInputTranscriptionRef.current = '';
+        currentOutputTranscriptionRef.current = '';
     }, []);
 
     const startLiveSession = async () => {
-        setIsConnectingLive(true);
+        setVoiceStatus('connecting');
         try {
-            const systemInstruction = initChat();
+            // Use specialized prompt for voice
+            const systemInstruction = getLiveSystemInstruction();
             
             // Audio setup
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({sampleRate: 16000});
@@ -206,7 +231,14 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
             outputNode.connect(outputAudioContext.destination);
             outputNodeRef.current = outputNode;
             
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Request Echo Cancellation
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } 
+            });
             streamRef.current = stream;
             
             // Connect to Live API
@@ -218,7 +250,6 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                         voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } 
                     },
                     systemInstruction: systemInstruction,
-                    // Note: 'tools' with googleMaps are currently causing invalid argument errors in Live API preview
                     outputAudioTranscription: {}, 
                     inputAudioTranscription: {},
                 },
@@ -226,7 +257,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                     onopen: () => {
                         console.log('Live session opened');
                         setIsLive(true);
-                        setIsConnectingLive(false);
+                        setVoiceStatus('listening');
                         
                         // Setup Audio Input Stream
                         const source = inputAudioContext.createMediaStreamSource(stream);
@@ -236,6 +267,10 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                         scriptProcessorRef.current = scriptProcessor;
                         
                         scriptProcessor.onaudioprocess = (e) => {
+                            if (audioSourcesRef.current.size > 0) {
+                                return;
+                            }
+
                             const inputData = e.inputBuffer.getChannelData(0);
                             
                             // Convert Float32 to Int16
@@ -245,10 +280,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                 int16[i] = inputData[i] * 32768;
                             }
                             
-                            // Convert to base64 directly
                             const base64Data = bytesToBase64(new Uint8Array(int16.buffer));
                             
-                            // Send to model
                             sessionPromise.then(session => {
                                 session.sendRealtimeInput({
                                     media: {
@@ -263,12 +296,22 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                         scriptProcessor.connect(inputAudioContext.destination); 
                     },
                     onmessage: async (message: LiveServerMessage) => {
+                         // Check for interruption signal from server
+                        const interrupted = message.serverContent?.interrupted;
+                        if (interrupted) {
+                            console.log('Interrupted');
+                            audioSourcesRef.current.forEach(source => source.stop());
+                            audioSourcesRef.current.clear();
+                            setVoiceStatus('listening');
+                            return;
+                        }
+
                         // Handle Transcriptions
                         if (message.serverContent?.outputTranscription) {
                             const text = message.serverContent.outputTranscription.text;
                             currentOutputTranscriptionRef.current += text;
+                            setLiveTranscript(prev => ({ ...prev, model: currentOutputTranscriptionRef.current }));
                             
-                             // Update UI with partial transcription
                              setHistory(prev => {
                                 const newHistory = [...prev];
                                 const lastMsg = newHistory[newHistory.length - 1];
@@ -283,8 +326,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                         } else if (message.serverContent?.inputTranscription) {
                             const text = message.serverContent.inputTranscription.text;
                             currentInputTranscriptionRef.current += text;
+                            setLiveTranscript(prev => ({ ...prev, user: currentInputTranscriptionRef.current }));
                             
-                             // Update UI with user transcription
                              setHistory(prev => {
                                 const newHistory = [...prev];
                                 const lastMsg = newHistory[newHistory.length - 1];
@@ -292,7 +335,6 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                      lastMsg.text = currentInputTranscriptionRef.current;
                                      return newHistory;
                                 } else {
-                                     // If the last message was a model message, we are starting a new user turn
                                      if (lastMsg && lastMsg.role === 'model') {
                                          return [...prev, { role: 'user', text: currentInputTranscriptionRef.current, isLive: true }];
                                      }
@@ -303,6 +345,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
 
                         if (message.serverContent?.turnComplete) {
                             console.log('Turn complete');
+                            setVoiceStatus('thinking');
                             currentInputTranscriptionRef.current = '';
                             currentOutputTranscriptionRef.current = '';
                         }
@@ -312,6 +355,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                         if (base64Audio) {
                             const audioCtx = outputAudioContextRef.current;
                             if (!audioCtx) return;
+                            
+                            setVoiceStatus('speaking');
 
                             nextStartTimeRef.current = Math.max(nextStartTimeRef.current, audioCtx.currentTime);
                             
@@ -329,6 +374,9 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                 
                                 source.addEventListener('ended', () => {
                                     audioSourcesRef.current.delete(source);
+                                    if (audioSourcesRef.current.size === 0) {
+                                        setVoiceStatus('listening');
+                                    }
                                 });
                                 
                                 source.start(nextStartTimeRef.current);
@@ -346,7 +394,9 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                     },
                     onerror: (e) => {
                         console.error('Live session error', e);
-                        stopLiveSession();
+                        setVoiceStatus('inactive');
+                        setIsLive(false);
+                        alert("Connection to Voice Assistant failed. Please check your network and try again.");
                     }
                 }
             });
@@ -355,19 +405,20 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
 
         } catch (error) {
             console.error('Failed to start live session:', error);
-            setIsConnectingLive(false);
+            setVoiceStatus('inactive');
             setIsLive(false);
         }
     };
 
     const toggleVoiceMode = () => {
-        if (isLive || isConnectingLive) {
+        if (isLive) {
             stopLiveSession();
-            // Re-initialize text chat to clear state if needed or just continue
             startChatSession();
         } else {
-            setChat(null); // Clear text chat session to avoid confusion
-            setHistory([{ role: 'model', text: 'Listening... (Start speaking)' }]); // Reset history for voice session or append? Let's reset for clean slate context
+            setChat(null); 
+            setLiveTranscript({user: '', model: ''});
+            currentInputTranscriptionRef.current = '';
+            currentOutputTranscriptionRef.current = '';
             startLiveSession();
         }
     };
@@ -417,16 +468,28 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
 
         const recognition = new SpeechRecognition();
         recognition.lang = 'en-GB';
-        recognition.interimResults = false;
+        recognition.interimResults = true; 
         recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
             setIsDictating(true);
+            setInput(''); 
         };
 
         recognition.onresult = (event: any) => {
-            const transcript = event.results[0][0].transcript;
-            setInput(prev => prev + (prev ? ' ' : '') + transcript);
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            
+            const currentText = finalTranscript || interimTranscript;
+            setInput(currentText);
         };
 
         recognition.onerror = (event: any) => {
@@ -453,17 +516,17 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
             return;
         }
         
-        stopSpeaking(); // Stop any current speech
+        stopSpeaking(); 
         
-        // Clean markdown for better speech
-        // Remove links [Text](url) -> Text
-        let cleanText = text.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
-        // Remove bold/italic **Text** -> Text, *Text* -> Text
-        cleanText = cleanText.replace(/[*_#`]/g, '');
-        // Remove emojis (simple regex, might not catch all but helps)
-        cleanText = cleanText.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '');
+        let cleanText = text
+            .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+            .replace(/https?:\/\/[^\s]+/g, '')
+            .replace(/[*_#`~]/g, '')
+            .replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '')
+            .trim();
 
         const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'en-GB';
         utterance.onend = () => setSpeakingMessageId(null);
         utterance.onerror = () => setSpeakingMessageId(null);
         
@@ -517,7 +580,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
     const handleCopyLink = (url: string) => {
         navigator.clipboard.writeText(url).then(() => {
             setCopiedLink(url);
-            setTimeout(() => setCopiedLink(null), 2000); // Reset after 2 seconds
+            setTimeout(() => setCopiedLink(null), 2000); 
         }).catch(err => {
             console.error('Failed to copy link:', err);
         });
@@ -551,188 +614,281 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
 
     return (
         <>
-            <div className="fixed inset-0 bg-black bg-opacity-30 z-40" onClick={onClose}></div>
-            <div className="fixed bottom-0 right-0 md:bottom-6 md:right-6 w-full h-full md:w-[400px] md:h-[600px] bg-white text-gray-800 rounded-none md:rounded-2xl shadow-2xl flex flex-col transform transition-all duration-300 z-50 border border-gray-200" onClick={(e) => e.stopPropagation()}>
-                <header className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50 rounded-t-none md:rounded-t-2xl">
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40" onClick={onClose}></div>
+            <div className="fixed bottom-0 right-0 md:bottom-6 md:right-6 w-full h-full md:w-[400px] md:h-[650px] bg-white text-gray-800 rounded-none md:rounded-[28px] shadow-2xl flex flex-col transform transition-all duration-300 z-50 border border-gray-100 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                
+                {/* Standard Chat Header */}
+                <header className="flex items-center justify-between p-4 bg-white border-b border-gray-100 z-20 relative">
                     <div className="flex items-center gap-3">
-                       <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white"><BotIcon/></div>
-                       <h2 className="text-xl font-medium text-gray-800">MeetApp Assistant</h2>
+                       <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-900"><BotIcon/></div>
+                       <h2 className="text-xl font-medium text-gray-900 font-google-sans">MeetApp Assistant</h2>
                     </div>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800 p-1 rounded-full hover:bg-gray-200">
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-colors">
                         <CloseIcon />
                     </button>
                 </header>
 
-                <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto custom-scrollbar bg-gray-100 relative">
-                    {history.map((msg, index) => {
-                        const isLastMessage = index === history.length - 1;
-                        const showTypingIndicator = msg.role === 'model' && isLoading && isLastMessage && msg.text === '';
-                        const isSpeakingThis = speakingMessageId === index;
+                {/* --- LIVE VOICE OVERLAY --- */}
+                {isLive ? (
+                    <div className="absolute inset-0 top-[72px] bg-white z-30 flex flex-col">
+                        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8 relative overflow-hidden">
+                             {/* Background Decorative Rings */}
+                             <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+                                 <div className={`absolute w-64 h-64 rounded-full border-2 border-blue-500 ${voiceStatus === 'speaking' ? 'animate-ping' : ''}`}></div>
+                                 <div className={`absolute w-48 h-48 rounded-full border-2 border-blue-400 ${voiceStatus === 'speaking' ? 'animate-ping [animation-delay:-0.5s]' : ''}`}></div>
+                             </div>
 
-                        return (
-                            <div key={index} className={`flex items-start gap-3 my-4 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-                                {msg.role === 'model' && (
-                                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm border border-gray-200">
-                                      <BotIcon/>
+                             {/* Status Visualizer */}
+                             <div className="relative z-10 flex flex-col items-center">
+                                {voiceStatus === 'connecting' && (
+                                     <div className="w-24 h-24 rounded-full border-4 border-gray-200 border-t-blue-500 animate-spin mb-4"></div>
+                                )}
+                                
+                                {voiceStatus === 'listening' && (
+                                    <div className="relative">
+                                        <div className="w-24 h-24 rounded-full bg-red-50 text-red-500 flex items-center justify-center ring-4 ring-red-100 animate-pulse">
+                                            <MicIcon className="w-10 h-10" />
+                                        </div>
+                                        <div className="absolute -inset-2 rounded-full border border-red-200 animate-ping opacity-20"></div>
                                     </div>
                                 )}
-                                <div className={`max-w-xs md:max-w-sm px-4 py-2.5 rounded-2xl shadow-sm ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none'}`}>
-                                    {showTypingIndicator ? (
-                                        <div className="flex items-center">
-                                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s] mx-1"></div>
-                                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                                        </div>
-                                    ) : (
-                                        <div className="prose prose-base max-w-none prose-a:text-blue-600 hover:prose-a:underline">
-                                            <ReactMarkdown
-                                                remarkPlugins={[remarkGfm]}
-                                                components={{
-                                                    a: ({ href, children }) => {
-                                                        if (href && (href.includes('google.com/maps/search') || href.includes('google.com/maps/dir'))) {
-                                                            const handleViewOnMap = (e: React.MouseEvent) => {
-                                                                e.preventDefault();
-                                                                handleLinkClick(href, typeof children === 'string' ? children : undefined);
-                                                            };
-                                            
-                                                            const handleDirections = (e: React.MouseEvent) => {
-                                                                e.preventDefault();
-                                                                handleDirectionsClick(href);
-                                                            };
-
-                                                            const isCopied = copiedLink === href;
-                                            
-                                                            return (
-                                                                <span className="inline-flex flex-col items-start">
-                                                                    <a 
-                                                                        href={href} 
-                                                                        onClick={handleViewOnMap}
-                                                                        className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline cursor-pointer text-[1.05em]"
-                                                                    >
-                                                                        {children} <ExternalLinkIcon className="w-3 h-3 opacity-50" />
-                                                                    </a>
-                                                                    <span className="flex items-center gap-2 mt-2 flex-wrap">
-                                                                        <button
-                                                                            onClick={handleViewOnMap}
-                                                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-full transition-colors border border-blue-100"
-                                                                        >
-                                                                            <MapIcon className="!w-3.5 !h-3.5" /> Map
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={handleDirections}
-                                                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-full transition-colors border border-blue-100"
-                                                                        >
-                                                                            <DirectionsIcon className="!w-3.5 !h-3.5" /> Directions
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => handleCopyLink(href)}
-                                                                            className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1.5 transition-colors border ${
-                                                                                isCopied
-                                                                                    ? 'text-green-700 bg-green-100 border-green-200 cursor-default'
-                                                                                    : 'text-gray-500 bg-gray-50 hover:bg-gray-100 border-gray-200'
-                                                                            }`}
-                                                                            disabled={isCopied}
-                                                                        >
-                                                                            {isCopied ? <CheckIcon className="!w-3.5 !h-3.5" /> : <CopyIcon className="!w-3.5 !h-3.5" />}
-                                                                        </button>
-                                                                        
-                                                                        {/* Speaker Button for Map Results */}
-                                                                         <button
-                                                                            onClick={() => speakMessage(msg.text, index)}
-                                                                            className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1.5 transition-colors border ${
-                                                                                isSpeakingThis 
-                                                                                ? 'text-red-600 bg-red-50 border-red-200' 
-                                                                                : 'text-gray-500 bg-gray-50 hover:bg-gray-100 border-gray-200'
-                                                                            }`}
-                                                                            title={isSpeakingThis ? "Stop reading" : "Read aloud"}
-                                                                         >
-                                                                            {isSpeakingThis ? <StopCircleIcon className="!w-3.5 !h-3.5" /> : <VolumeUpIcon className="!w-3.5 !h-3.5" />}
-                                                                        </button>
-                                                                    </span>
-                                                                </span>
-                                                            );
-                                                        }
-                                                        
-                                                        return (
-                                                            <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1">
-                                                                {children} <ExternalLinkIcon />
-                                                            </a>
-                                                        );
-                                                    },
-                                                    p: ({children}) => <p className="mb-3 last:mb-0">{children}</p>
-                                                }}
-                                            >
-                                                {msg.text}
-                                            </ReactMarkdown>
-                                        </div>
-                                    )}
-                                </div>
-                                {msg.role === 'user' && (
-                                    <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center flex-shrink-0">
-                                       <UserIcon />
+                                
+                                {voiceStatus === 'thinking' && (
+                                     <div className="relative w-24 h-24 flex items-center justify-center">
+                                         <SparkleIcon className="w-16 h-16 text-amber-400 animate-pulse" />
+                                     </div>
+                                )}
+                                
+                                {voiceStatus === 'speaking' && (
+                                    <div className="relative w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 ring-4 ring-blue-100">
+                                         <WaveformIcon className="w-12 h-12 animate-pulse" />
                                     </div>
                                 )}
-                            </div>
-                        )
-                    })}
-                    {isLive && history.length <= 1 && (
-                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center text-gray-500 pointer-events-none">
-                             <WaveformIcon className="w-16 h-16 mx-auto mb-2 text-blue-400 animate-pulse" />
-                             <p>Assistant is listening...</p>
+
+                                <p className="mt-6 text-xl font-medium text-gray-700 font-google-sans">
+                                    {voiceStatus === 'connecting' && "Connecting..."}
+                                    {voiceStatus === 'listening' && "Listening..."}
+                                    {voiceStatus === 'thinking' && "Thinking..."}
+                                    {voiceStatus === 'speaking' && "Speaking..."}
+                                </p>
+                             </div>
+                             
+                             {/* Transcripts */}
+                             <div className="w-full max-w-sm mt-8 space-y-4 min-h-[120px] flex flex-col justify-end">
+                                 {liveTranscript.user && (
+                                     <div className="bg-gray-100 p-4 rounded-[20px] rounded-tr-none self-end ml-8 text-right">
+                                         <p className="text-gray-600 text-xs uppercase tracking-wide mb-1">You</p>
+                                         <p className="text-gray-900 font-medium">{liveTranscript.user}</p>
+                                     </div>
+                                 )}
+                                 {liveTranscript.model && (
+                                      <div className="bg-blue-50 p-4 rounded-[20px] rounded-tl-none self-start mr-8">
+                                         <p className="text-blue-600 text-xs uppercase tracking-wide mb-1">Assistant</p>
+                                         <p className="text-gray-900 font-medium">{liveTranscript.model}</p>
+                                      </div>
+                                 )}
+                             </div>
                         </div>
-                    )}
-                </div>
 
-                <footer className="p-3 border-t border-gray-200 bg-white rounded-b-none md:rounded-b-2xl">
-                    <div className="relative flex items-center gap-2">
-                         {/* Live Mode Toggle */}
-                        <button
-                            onClick={toggleVoiceMode}
-                            className={`p-3 rounded-full transition-all duration-300 ${
-                                isLive 
-                                ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse shadow-lg ring-4 ring-red-200' 
-                                : isConnectingLive 
-                                    ? 'bg-gray-200 text-gray-500 cursor-wait'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600'
-                            }`}
-                            title={isLive ? "Stop Live Conversation" : "Start Live Conversation (Audio Only)"}
-                        >
-                             {isConnectingLive ? <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div> : isLive ? <WaveformIcon className="w-6 h-6" /> : <MicIcon className="w-6 h-6" />}
-                        </button>
-                        
-                        <div className="relative flex-1">
-                            <input
-                                type="text"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && !isLoading && !isLive && handleSend()}
-                                placeholder={isLive ? "Voice mode active..." : "Ask about places in London..."}
-                                className={`w-full text-base py-3 pl-4 pr-20 bg-gray-100 border-2 border-gray-200 text-gray-900 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-500 ${isLive ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                disabled={isLoading || isLive}
-                            />
-                            
-                             {/* Dictation Mic */}
-                             <button
-                                onClick={handleDictation}
-                                disabled={isLive || isLoading}
-                                className={`absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-colors ${isDictating ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-gray-600'}`}
-                                title="Dictate"
+                        {/* Footer Controls */}
+                        <div className="p-6 border-t border-gray-100 bg-white flex justify-center gap-6">
+                            <button 
+                                onClick={toggleVoiceMode}
+                                className="flex flex-col items-center gap-1 group"
                             >
-                                <MicIcon className="w-5 h-5" />
-                            </button>
-
-                            {/* Send Button */}
-                            <button
-                                onClick={handleSend}
-                                disabled={isLoading || !input.trim() || isLive}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 text-white rounded-full p-2.5 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                                aria-label="Send message"
-                            >
-                                <SendIcon className="w-5 h-5" />
+                                <div className="w-14 h-14 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors text-gray-600">
+                                    <CloseIcon className="w-6 h-6" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-500 mt-2">End Voice</span>
                             </button>
                         </div>
                     </div>
-                </footer>
+                ) : (
+                    // Standard Text Chat Body
+                    <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto custom-scrollbar bg-white relative">
+                        {history.map((msg, index) => {
+                            const isLastMessage = index === history.length - 1;
+                            const showTypingIndicator = msg.role === 'model' && isLoading && isLastMessage && msg.text === '';
+                            const isSpeakingThis = speakingMessageId === index;
+
+                            return (
+                                <div key={index} className={`flex items-start gap-3 my-4 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                                    {msg.role === 'model' && (
+                                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-900 flex items-center justify-center flex-shrink-0">
+                                        <BotIcon/>
+                                        </div>
+                                    )}
+                                    <div className={`max-w-xs md:max-w-sm px-5 py-3 shadow-sm ${
+                                        msg.role === 'user' 
+                                            ? 'bg-blue-600 text-white rounded-[20px] rounded-br-none' 
+                                            : 'bg-gray-100 text-gray-900 rounded-[20px] rounded-bl-none'
+                                    }`}>
+                                        {showTypingIndicator ? (
+                                            <div className="flex items-center">
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s] mx-1"></div>
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                            </div>
+                                        ) : (
+                                            <div className="prose prose-base max-w-none prose-a:font-medium hover:prose-a:underline">
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                        a: ({ href, children }) => {
+                                                            const isInternalLink = href && (href.includes('google.com/maps/search') || href.includes('google.com/maps/dir'));
+                                                            
+                                                            if (isInternalLink) {
+                                                                const handleViewOnMap = (e: React.MouseEvent) => {
+                                                                    e.preventDefault();
+                                                                    handleLinkClick(href, typeof children === 'string' ? children : undefined);
+                                                                };
+                                                
+                                                                const handleDirections = (e: React.MouseEvent) => {
+                                                                    e.preventDefault();
+                                                                    handleDirectionsClick(href);
+                                                                };
+
+                                                                const isCopied = copiedLink === href;
+                                                
+                                                                return (
+                                                                    <span className="inline-flex flex-col items-start my-2 p-3 bg-white/50 rounded-xl border border-blue-200/50 w-full">
+                                                                        <a 
+                                                                            href={href} 
+                                                                            onClick={handleViewOnMap}
+                                                                            className={`inline-flex items-center gap-1 font-bold hover:underline cursor-pointer text-lg mb-2 ${msg.role === 'user' ? 'text-white' : 'text-blue-700'}`}
+                                                                        >
+                                                                            {children} <ExternalLinkIcon className="w-4 h-4 opacity-70" />
+                                                                        </a>
+                                                                        <span className="flex items-center gap-2 flex-wrap w-full">
+                                                                            <button
+                                                                                onClick={handleViewOnMap}
+                                                                                className="flex-1 inline-flex justify-center items-center gap-1.5 text-xs font-medium text-blue-700 bg-white hover:bg-blue-50 px-3 py-2 rounded-full transition-colors border border-blue-100 shadow-sm"
+                                                                            >
+                                                                                <MapIcon className="!w-4 !h-4" /> Map
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={handleDirections}
+                                                                                className="flex-1 inline-flex justify-center items-center gap-1.5 text-xs font-medium text-blue-700 bg-white hover:bg-blue-50 px-3 py-2 rounded-full transition-colors border border-blue-100 shadow-sm"
+                                                                            >
+                                                                                <DirectionsIcon className="!w-4 !h-4" /> Directions
+                                                                            </button>
+                                                                            
+                                                                            <div className="flex gap-2">
+                                                                                <button
+                                                                                    onClick={() => handleCopyLink(href)}
+                                                                                    className={`w-8 h-8 inline-flex items-center justify-center rounded-full transition-colors border shadow-sm ${
+                                                                                        isCopied
+                                                                                            ? 'text-green-700 bg-green-100 border-green-200'
+                                                                                            : 'text-gray-600 bg-white hover:bg-gray-50 border-gray-200'
+                                                                                    }`}
+                                                                                    disabled={isCopied}
+                                                                                >
+                                                                                    {isCopied ? <CheckIcon className="!w-4 !h-4" /> : <CopyIcon className="!w-4 !h-4" />}
+                                                                                </button>
+                                                                                
+                                                                                <button
+                                                                                    onClick={() => speakMessage(msg.text, index)}
+                                                                                    className={`w-8 h-8 inline-flex items-center justify-center rounded-full transition-colors border shadow-sm ${
+                                                                                        isSpeakingThis 
+                                                                                        ? 'text-red-600 bg-red-50 border-red-200' 
+                                                                                        : 'text-gray-600 bg-white hover:bg-gray-50 border-gray-200'
+                                                                                    }`}
+                                                                                    title={isSpeakingThis ? "Stop reading" : "Read aloud"}
+                                                                                >
+                                                                                    {isSpeakingThis ? <StopCircleIcon className="!w-4 !h-4" /> : <VolumeUpIcon className="!w-4 !h-4" />}
+                                                                                </button>
+                                                                            </div>
+                                                                        </span>
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            
+                                                            return (
+                                                                <a href={href} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 underline ${msg.role === 'user' ? 'text-white' : 'text-blue-700'}`}>
+                                                                    {children} <ExternalLinkIcon />
+                                                                </a>
+                                                            );
+                                                        },
+                                                        p: ({children}) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>
+                                                    }}
+                                                >
+                                                    {msg.text}
+                                                </ReactMarkdown>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {msg.role === 'user' && (
+                                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+                                        <UserIcon />
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+
+                {/* Footer Input Area */}
+                {!isLive && (
+                    <footer className="p-4 border-t border-gray-100 bg-white">
+                        <div className="relative flex items-center gap-2">
+                             {/* Start Live Mode */}
+                            <button
+                                onClick={toggleVoiceMode}
+                                className="p-3 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                title="Start Live Conversation"
+                            >
+                                 <WaveformIcon className="w-6 h-6" />
+                            </button>
+                            
+                            <div className="relative flex-1">
+                                {isDictating ? (
+                                    <div className="w-full h-[56px] flex items-center pl-4 pr-12 bg-red-50 border border-red-200 rounded-full animate-pulse">
+                                        <span className="text-red-600 font-medium">Listening... {input}</span>
+                                        <button
+                                            onClick={handleDictation}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 bg-white text-red-500 rounded-full p-2 hover:bg-red-100 transition-colors shadow-sm"
+                                        >
+                                            <StopCircleIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <input
+                                            type="text"
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
+                                            placeholder="Ask about places in London..."
+                                            className="w-full text-base py-4 pl-6 pr-24 bg-gray-50 border-none text-gray-900 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white placeholder:text-gray-500 transition-all"
+                                            disabled={isLoading}
+                                        />
+                                        
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                            <button
+                                                onClick={handleDictation}
+                                                disabled={isLoading}
+                                                className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                                                title="Dictate"
+                                            >
+                                                <MicIcon className="w-5 h-5" />
+                                            </button>
+
+                                            <button
+                                                onClick={handleSend}
+                                                disabled={isLoading || !input.trim()}
+                                                className="bg-blue-600 text-white rounded-full p-2 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                                aria-label="Send message"
+                                            >
+                                                <SendIcon className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </footer>
+                )}
             </div>
             {mapModalData && <MapModal url={mapModalData.url} title={mapModalData.title} onClose={() => setMapModalData(null)} />}
         </>

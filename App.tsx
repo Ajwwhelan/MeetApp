@@ -6,7 +6,7 @@ import { Venue, GroundingChunk } from './types';
 import LocationInput from './components/LocationInput';
 import VenueCard from './components/VenueCard';
 import Chatbot from './components/Chatbot';
-import { ChatIcon, SearchIcon, ErrorIcon, LoadingIcon, ShareIcon, CheckIcon, BookmarksIcon, SubwayIcon, BusIcon, TramIcon, RailIcon, TrainIcon, StartIcon, DestinationIcon } from './components/icons';
+import { ChatIcon, SearchIcon, ErrorIcon, LoadingIcon, ShareIcon, CheckIcon, BookmarksIcon, SubwayIcon, BusIcon, TramIcon, RailIcon, TrainIcon, StartIcon, DestinationIcon, ExternalLinkIcon } from './components/icons';
 import VenueFilter from './components/VenueFilter';
 import TutorialOverlay from './components/TutorialOverlay';
 import MapModal from './components/MapModal';
@@ -236,17 +236,17 @@ const App: React.FC = () => {
   }, [venues, locationA, locationB]);
 
   return (
-    <div className="min-h-screen bg-[#FDFBFF] text-gray-800 font-sans">
+    <div className="min-h-screen bg-[#F2F5F9] text-gray-900 font-sans selection:bg-blue-200">
       {showTutorial && <TutorialOverlay onClose={handleCloseTutorial} />}
       <div className="container mx-auto p-4 md:p-6 max-w-6xl">
-        <header className="w-full max-w-xl mx-auto bg-blue-50/50 rounded-[28px] p-6 md:p-8 mb-8">
-            <h1 className="text-4xl font-google-sans font-medium text-gray-900 text-center mb-2 tracking-tight">
+        <header className="w-full max-w-xl mx-auto bg-blue-50/60 rounded-[32px] p-6 md:p-8 mb-8 backdrop-blur-sm border border-white/50 shadow-sm">
+            <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 text-center mb-3 tracking-tight">
               MeetApp London
             </h1>
-            <p className="text-gray-500 text-center mb-8 text-base">Find the fairest meeting point by public transport.</p>
+            <p className="text-gray-600 font-medium text-center mb-8 text-base md:text-lg">Find the fairest meeting point by public transport.</p>
 
             <div className="relative space-y-0">
-              <div className="absolute left-7 top-12 bottom-12 w-0.5 bg-gray-300 border-l-2 border-dotted border-gray-300 z-0 hidden md:block" style={{left: '1.8rem'}}></div>
+              <div className="absolute left-7 top-12 bottom-12 w-0.5 bg-gray-300 border-l-2 border-dotted border-gray-400 z-0 hidden md:block" style={{left: '1.8rem'}}></div>
               
               <div className="relative z-10 space-y-4">
                 <LocationInput
@@ -269,7 +269,7 @@ const App: React.FC = () => {
             </div>
 
             <div className="mt-8">
-                <h3 className="text-sm font-medium text-gray-500 mb-3 text-center">Transport Modes</h3>
+                <h3 className="text-sm font-bold text-gray-500 mb-3 text-center uppercase tracking-wider">Transport Modes</h3>
                 <div className="flex flex-wrap justify-center gap-2">
                   {availableTransitModes.map(mode => {
                     const isSelected = transitPreferences.includes(mode);
@@ -278,10 +278,10 @@ const App: React.FC = () => {
                         key={mode}
                         onClick={() => handlePreferenceChange(mode)}
                         aria-pressed={isSelected}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 text-sm font-medium border ${
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl transition-all duration-200 text-sm font-bold border-2 ${
                           isSelected 
-                            ? 'bg-blue-100 text-blue-900 border-transparent hover:bg-blue-200' 
-                            : 'bg-transparent text-gray-700 border-gray-300 hover:bg-gray-100'
+                            ? 'bg-blue-100 text-blue-900 border-transparent hover:bg-blue-200 shadow-sm' 
+                            : 'bg-transparent text-gray-600 border-gray-300 hover:bg-white hover:border-gray-400'
                         }`}
                       >
                         <span className={isSelected ? 'text-blue-900' : 'text-gray-500'}>{transitModeIcons[mode]}</span>
@@ -296,7 +296,7 @@ const App: React.FC = () => {
               <button
                 onClick={handleFindMeetingPoint}
                 disabled={isLoading}
-                className="w-full bg-blue-600 text-white font-medium text-lg h-12 md:h-14 px-6 rounded-full hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all shadow-sm hover:shadow-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-blue-600 text-white font-bold text-lg h-14 md:h-16 px-6 rounded-full hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-600/30 transition-all shadow-md hover:shadow-lg disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center gap-3 transform active:scale-[0.98]"
               >
                 {isLoading ? (
                   <>
@@ -305,7 +305,7 @@ const App: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <SearchIcon className="w-5 h-5" />
+                    <SearchIcon className="w-6 h-6" />
                     Find Meeting Point
                   </>
                 )}
@@ -314,13 +314,13 @@ const App: React.FC = () => {
         </header>
 
         {savedVenues.length > 0 && (
-          <section className="mt-10 max-w-5xl mx-auto">
-            <div className="bg-white rounded-[24px] shadow-sm p-6 border border-gray-100">
+          <section className="mt-12 max-w-5xl mx-auto">
+            <div className="bg-white rounded-[28px] shadow-sm p-8 border border-gray-100">
               <div className="flex items-center gap-3 mb-6">
-                <div className="flex-shrink-0 w-10 h-10 bg-blue-100 text-blue-900 rounded-full flex items-center justify-center">
-                  <BookmarksIcon />
+                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 text-blue-900 rounded-full flex items-center justify-center">
+                  <BookmarksIcon className="w-6 h-6" />
                 </div>
-                <h2 className="text-xl font-medium text-gray-900">Saved Places</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Saved Places</h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {savedVenues.map((venue, index) => (
@@ -337,32 +337,32 @@ const App: React.FC = () => {
           </section>
         )}
 
-        <main className="mt-8 pb-28">
+        <main className="mt-10 pb-32">
           {error && (
-            <div className="max-w-lg mx-auto bg-red-50 border border-red-100 text-red-800 px-6 py-4 rounded-[20px] relative flex items-start gap-3 shadow-sm mb-8" role="alert">
-              <ErrorIcon />
+            <div className="max-w-lg mx-auto bg-red-50 border border-red-100 text-red-900 px-6 py-5 rounded-[24px] relative flex items-start gap-3 shadow-sm mb-8" role="alert">
+              <ErrorIcon className="w-6 h-6 mt-0.5" />
               <div>
-                <strong className="font-medium block mb-1">Unable to find places</strong>
-                <span className="text-sm">{error}</span>
+                <strong className="font-bold text-lg block mb-1">Unable to find places</strong>
+                <span className="text-base font-medium opacity-90">{error}</span>
               </div>
             </div>
           )}
 
           {isLoading && (
             <div className="text-center mt-12">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-[3px] border-gray-200 border-t-blue-600"></div>
-                <p className="mt-4 text-lg font-medium text-gray-600">Calculating routes...</p>
-                <p className="text-sm text-gray-400 mt-1">Analyzing transport links between locations</p>
+                <div className="inline-block animate-spin rounded-full h-14 w-14 border-[4px] border-gray-200 border-t-blue-600"></div>
+                <p className="mt-6 text-xl font-bold text-gray-700">Calculating routes...</p>
+                <p className="text-base font-medium text-gray-400 mt-2">Analyzing transport links between locations</p>
             </div>
           )}
 
           {hasSearched && !isLoading && venues.length === 0 && !error && (
-            <div className="max-w-lg mx-auto text-center py-12 px-4 bg-white rounded-[24px] shadow-sm border border-gray-100">
-                <div className="flex justify-center items-center mx-auto w-16 h-16 bg-gray-50 rounded-full mb-4">
-                    <SearchIcon className="w-8 h-8 text-gray-400" />
+            <div className="max-w-lg mx-auto text-center py-16 px-6 bg-white rounded-[32px] shadow-sm border border-gray-100">
+                <div className="flex justify-center items-center mx-auto w-20 h-20 bg-gray-50 rounded-full mb-6">
+                    <SearchIcon className="w-10 h-10 text-gray-400" />
                 </div>
-                <h2 className="text-xl font-medium text-gray-900 mb-2">No Meeting Points Found</h2>
-                <p className="text-gray-500">
+                <h2 className="text-2xl font-bold text-gray-900 mb-3">No Meeting Points Found</h2>
+                <p className="text-gray-500 font-medium text-lg leading-relaxed">
                     We couldn't find any suitable spots halfway. Try adjusting your locations or enabling more transit modes.
                 </p>
             </div>
@@ -370,9 +370,9 @@ const App: React.FC = () => {
           
           {venues.length > 0 && !isLoading && (
             <div className="max-w-5xl mx-auto">
-              <div className="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
-                <h2 className="text-2xl font-normal text-gray-900">Suggested Meeting Points</h2>
-                <div className="flex items-center gap-2 self-end md:self-auto flex-wrap justify-end">
+              <div className="flex flex-col md:flex-row justify-between md:items-center mb-8 gap-5">
+                <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Suggested Meeting Points</h2>
+                <div className="flex items-center gap-3 self-end md:self-auto flex-wrap justify-end">
                   <VenueFilter 
                     types={venueTypes} 
                     selectedType={selectedVenueType} 
@@ -380,22 +380,22 @@ const App: React.FC = () => {
                   />
                    <button
                       onClick={handleShareResults}
-                      className={`flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-full transition-colors ${
+                      className={`flex items-center gap-2 px-6 py-3 text-sm font-bold rounded-full transition-colors shadow-sm ${
                         shareConfirmation 
                           ? 'bg-green-100 text-green-800 border-green-200 cursor-default'
-                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300'
                       }`}
                       aria-label="Share results"
                       disabled={!!shareConfirmation}
                   >
-                      {shareConfirmation ? <CheckIcon className="w-4 h-4" /> : <ShareIcon className="w-4 h-4" />}
+                      {shareConfirmation ? <CheckIcon className="w-5 h-5" /> : <ShareIcon className="w-5 h-5" />}
                       <span>{shareConfirmation || 'Share'}</span>
                   </button>
                 </div>
               </div>
               
               {filteredVenues.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {filteredVenues.map((venue, index) => {
                     const isSaved = savedVenueIds.has(venue.place_id);
                     return (
@@ -411,26 +411,27 @@ const App: React.FC = () => {
                   })}
                 </div>
               ) : (
-                <div className="text-center py-12 px-4 bg-white rounded-[24px] shadow-sm border border-gray-100">
-                    <p className="text-gray-600">No venues match the "<strong>{selectedVenueType}</strong>" filter.</p>
+                <div className="text-center py-16 px-6 bg-white rounded-[32px] shadow-sm border border-gray-100">
+                    <p className="text-gray-600 font-medium text-lg">No venues match the "<strong className="text-gray-900">{selectedVenueType}</strong>" filter.</p>
                 </div>
               )}
 
               {groundingChunks.length > 0 && (
-                 <div className="mt-12 pt-6 border-t border-gray-200">
+                 <div className="mt-16 pt-8 border-t border-gray-200">
                     <div className="flex items-start gap-3 text-sm text-gray-500">
-                        <div className="mt-0.5">
-                           <span className="font-medium text-gray-700">Source: Google Maps</span>
-                           <ul className="mt-1 space-y-1">
+                        <div className="mt-0.5 w-full">
+                           <span className="font-bold text-gray-700 uppercase tracking-wider text-xs block mb-2">Source: Google Maps</span>
+                           <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
                               {groundingChunks.map((chunk, index) => (
                                 chunk.maps?.uri && (
                                   <li key={index}>
                                     <a 
                                         href={chunk.maps.uri} 
                                         onClick={(e) => handleGroundingLinkClick(e, chunk.maps.uri, chunk.maps.title)}
-                                        className="hover:text-blue-600 hover:underline truncate block max-w-xs md:max-w-md cursor-pointer"
+                                        className="flex items-center gap-2 p-3 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all text-gray-700 font-medium hover:text-blue-700"
                                     >
-                                      {chunk.maps.title}
+                                      <span className="truncate">{chunk.maps.title}</span>
+                                      <ExternalLinkIcon className="w-4 h-4 text-gray-400 flex-shrink-0 ml-auto" />
                                     </a>
                                   </li>
                                 )
@@ -449,13 +450,13 @@ const App: React.FC = () => {
       <div className="fixed bottom-6 right-6 z-30">
           <button
               onClick={() => setIsChatOpen(!isChatOpen)}
-              className="group flex items-center gap-2 bg-blue-100 text-blue-900 rounded-[20px] p-4 pr-6 shadow-md hover:shadow-lg hover:bg-blue-200 focus:outline-none focus:ring-4 focus:ring-blue-500/30 transition-all active:scale-95"
+              className="group flex items-center gap-3 bg-blue-100 text-blue-900 rounded-[24px] py-4 pl-5 pr-7 shadow-lg hover:shadow-xl hover:bg-blue-200 focus:outline-none focus:ring-4 focus:ring-blue-500/30 transition-all active:scale-95"
               aria-label="Open chatbot"
           >
               <div className="w-8 h-8 flex items-center justify-center">
                   <ChatIcon className="w-6 h-6" />
               </div>
-              <span className="font-medium text-base">Ask Assistant</span>
+              <span className="font-bold text-lg">Assistant</span>
           </button>
       </div>
 

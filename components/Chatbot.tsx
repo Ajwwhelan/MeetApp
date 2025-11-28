@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Chat, LiveServerMessage, Modality } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
@@ -116,7 +115,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
         4. COMPLETE YOUR THOUGHTS. Do not stop in the middle of a sentence or list.
         5. For each option, clearly state the name and a short, punchy reason why it's good (e.g., "First is The Folly, great for its garden vibe.").
         6. Keep your total response concise (under 45 seconds).
-        7. Do NOT list addresses or read out long URLs.`;
+        7. Do NOT list addresses or read out long URLs.
+        8. If you cannot find a location or cannot provide directions due to technical limits or missing data, explicitly say "I'm sorry, I can't find that specific location" or "I'm having trouble retrieving those directions" so the user knows an error occurred.`;
 
         if (userCoords) {
             instruction += `\n\nUser Context: Latitude ${userCoords.latitude}, Longitude ${userCoords.longitude}. Use this for relative distance (e.g. "It's nearby") but do not read coordinates.`;
@@ -267,6 +267,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                         scriptProcessorRef.current = scriptProcessor;
                         
                         scriptProcessor.onaudioprocess = (e) => {
+                            // ECHO PREVENTION: 
                             if (audioSourcesRef.current.size > 0) {
                                 return;
                             }
@@ -396,7 +397,15 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                         console.error('Live session error', e);
                         setVoiceStatus('inactive');
                         setIsLive(false);
-                        alert("Connection to Voice Assistant failed. Please check your network and try again.");
+                        
+                        // Speak the error message to the user
+                        const msg = "I'm sorry, I'm having trouble connecting to the server. Please check your connection and try again.";
+                        if ('speechSynthesis' in window) {
+                            const utterance = new SpeechSynthesisUtterance(msg);
+                            window.speechSynthesis.speak(utterance);
+                        } else {
+                            alert(msg);
+                        }
                     }
                 }
             });
@@ -614,58 +623,59 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
 
     return (
         <>
-            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40" onClick={onClose}></div>
-            <div className="fixed bottom-0 right-0 md:bottom-6 md:right-6 w-full h-full md:w-[400px] md:h-[650px] bg-white text-gray-800 rounded-none md:rounded-[28px] shadow-2xl flex flex-col transform transition-all duration-300 z-50 border border-gray-100 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={onClose}></div>
+            <div className="fixed bottom-0 right-0 md:bottom-6 md:right-6 w-full h-full md:w-[420px] md:h-[700px] bg-[#FDFDFD] text-gray-900 rounded-none md:rounded-[32px] shadow-2xl flex flex-col transform transition-all duration-300 z-50 border border-gray-100 overflow-hidden font-sans" onClick={(e) => e.stopPropagation()}>
                 
                 {/* Standard Chat Header */}
-                <header className="flex items-center justify-between p-4 bg-white border-b border-gray-100 z-20 relative">
-                    <div className="flex items-center gap-3">
-                       <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-900"><BotIcon/></div>
-                       <h2 className="text-xl font-medium text-gray-900 font-google-sans">MeetApp Assistant</h2>
+                <header className="flex items-center justify-between p-5 bg-white border-b border-gray-100 z-20 relative shadow-sm">
+                    <div className="flex items-center gap-4">
+                       <div className="w-11 h-11 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 shadow-inner">
+                            <BotIcon className="w-6 h-6" />
+                       </div>
+                       <h2 className="text-xl font-bold text-gray-900 tracking-tight">MeetApp Assistant</h2>
                     </div>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800 p-2 rounded-full hover:bg-gray-100 transition-colors">
-                        <CloseIcon />
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-900 p-2.5 rounded-full hover:bg-gray-100 transition-colors">
+                        <CloseIcon className="w-6 h-6" />
                     </button>
                 </header>
 
                 {/* --- LIVE VOICE OVERLAY --- */}
                 {isLive ? (
-                    <div className="absolute inset-0 top-[72px] bg-white z-30 flex flex-col">
-                        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8 relative overflow-hidden">
+                    <div className="absolute inset-0 top-[84px] bg-white z-30 flex flex-col">
+                        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-10 relative overflow-hidden">
                              {/* Background Decorative Rings */}
                              <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
-                                 <div className={`absolute w-64 h-64 rounded-full border-2 border-blue-500 ${voiceStatus === 'speaking' ? 'animate-ping' : ''}`}></div>
-                                 <div className={`absolute w-48 h-48 rounded-full border-2 border-blue-400 ${voiceStatus === 'speaking' ? 'animate-ping [animation-delay:-0.5s]' : ''}`}></div>
+                                 <div className={`absolute w-72 h-72 rounded-full border-2 border-blue-500 ${voiceStatus === 'speaking' ? 'animate-ping' : ''}`}></div>
+                                 <div className={`absolute w-56 h-56 rounded-full border-2 border-blue-400 ${voiceStatus === 'speaking' ? 'animate-ping [animation-delay:-0.5s]' : ''}`}></div>
                              </div>
 
                              {/* Status Visualizer */}
                              <div className="relative z-10 flex flex-col items-center">
                                 {voiceStatus === 'connecting' && (
-                                     <div className="w-24 h-24 rounded-full border-4 border-gray-200 border-t-blue-500 animate-spin mb-4"></div>
+                                     <div className="w-28 h-28 rounded-full border-4 border-gray-200 border-t-blue-600 animate-spin mb-4"></div>
                                 )}
                                 
                                 {voiceStatus === 'listening' && (
                                     <div className="relative">
-                                        <div className="w-24 h-24 rounded-full bg-red-50 text-red-500 flex items-center justify-center ring-4 ring-red-100 animate-pulse">
-                                            <MicIcon className="w-10 h-10" />
+                                        <div className="w-28 h-28 rounded-full bg-red-50 text-red-500 flex items-center justify-center ring-4 ring-red-100 animate-pulse shadow-lg">
+                                            <MicIcon className="w-12 h-12" />
                                         </div>
-                                        <div className="absolute -inset-2 rounded-full border border-red-200 animate-ping opacity-20"></div>
                                     </div>
                                 )}
                                 
                                 {voiceStatus === 'thinking' && (
-                                     <div className="relative w-24 h-24 flex items-center justify-center">
-                                         <SparkleIcon className="w-16 h-16 text-amber-400 animate-pulse" />
+                                     <div className="relative w-28 h-28 flex items-center justify-center">
+                                         <SparkleIcon className="w-20 h-20 text-amber-400 animate-pulse drop-shadow-md" />
                                      </div>
                                 )}
                                 
                                 {voiceStatus === 'speaking' && (
-                                    <div className="relative w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 ring-4 ring-blue-100">
-                                         <WaveformIcon className="w-12 h-12 animate-pulse" />
+                                    <div className="relative w-28 h-28 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 ring-4 ring-blue-100 shadow-lg">
+                                         <WaveformIcon className="w-14 h-14 animate-pulse" />
                                     </div>
                                 )}
 
-                                <p className="mt-6 text-xl font-medium text-gray-700 font-google-sans">
+                                <p className="mt-8 text-2xl font-bold text-gray-800 tracking-tight">
                                     {voiceStatus === 'connecting' && "Connecting..."}
                                     {voiceStatus === 'listening' && "Listening..."}
                                     {voiceStatus === 'thinking' && "Thinking..."}
@@ -674,17 +684,17 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                              </div>
                              
                              {/* Transcripts */}
-                             <div className="w-full max-w-sm mt-8 space-y-4 min-h-[120px] flex flex-col justify-end">
+                             <div className="w-full max-w-sm mt-8 space-y-5 min-h-[140px] flex flex-col justify-end">
                                  {liveTranscript.user && (
-                                     <div className="bg-gray-100 p-4 rounded-[20px] rounded-tr-none self-end ml-8 text-right">
-                                         <p className="text-gray-600 text-xs uppercase tracking-wide mb-1">You</p>
-                                         <p className="text-gray-900 font-medium">{liveTranscript.user}</p>
+                                     <div className="bg-gray-100 p-5 rounded-[24px] rounded-tr-none self-end ml-10 text-right shadow-sm">
+                                         <p className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1.5">You</p>
+                                         <p className="text-gray-900 font-bold text-lg leading-snug">{liveTranscript.user}</p>
                                      </div>
                                  )}
                                  {liveTranscript.model && (
-                                      <div className="bg-blue-50 p-4 rounded-[20px] rounded-tl-none self-start mr-8">
-                                         <p className="text-blue-600 text-xs uppercase tracking-wide mb-1">Assistant</p>
-                                         <p className="text-gray-900 font-medium">{liveTranscript.model}</p>
+                                      <div className="bg-blue-50 p-5 rounded-[24px] rounded-tl-none self-start mr-10 shadow-sm border border-blue-100">
+                                         <p className="text-blue-700 text-xs font-bold uppercase tracking-wider mb-1.5">Assistant</p>
+                                         <p className="text-gray-900 font-medium text-lg leading-snug">{liveTranscript.model}</p>
                                       </div>
                                  )}
                              </div>
@@ -694,43 +704,43 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                         <div className="p-6 border-t border-gray-100 bg-white flex justify-center gap-6">
                             <button 
                                 onClick={toggleVoiceMode}
-                                className="flex flex-col items-center gap-1 group"
+                                className="flex flex-col items-center gap-2 group"
                             >
-                                <div className="w-14 h-14 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors text-gray-600">
-                                    <CloseIcon className="w-6 h-6" />
+                                <div className="w-16 h-16 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all text-gray-600 group-hover:scale-105 shadow-sm">
+                                    <CloseIcon className="w-8 h-8" />
                                 </div>
-                                <span className="text-xs font-medium text-gray-500 mt-2">End Voice</span>
+                                <span className="text-sm font-bold text-gray-500">End Voice</span>
                             </button>
                         </div>
                     </div>
                 ) : (
                     // Standard Text Chat Body
-                    <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto custom-scrollbar bg-white relative">
+                    <div ref={chatContainerRef} className="flex-1 p-5 overflow-y-auto custom-scrollbar bg-[#F9FAFB] relative">
                         {history.map((msg, index) => {
                             const isLastMessage = index === history.length - 1;
                             const showTypingIndicator = msg.role === 'model' && isLoading && isLastMessage && msg.text === '';
                             const isSpeakingThis = speakingMessageId === index;
 
                             return (
-                                <div key={index} className={`flex items-start gap-3 my-4 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                                <div key={index} className={`flex items-start gap-4 my-5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                                     {msg.role === 'model' && (
-                                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-900 flex items-center justify-center flex-shrink-0">
-                                        <BotIcon/>
+                                        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-900 flex items-center justify-center flex-shrink-0 shadow-sm">
+                                            <BotIcon className="w-5 h-5"/>
                                         </div>
                                     )}
-                                    <div className={`max-w-xs md:max-w-sm px-5 py-3 shadow-sm ${
+                                    <div className={`max-w-xs md:max-w-sm px-6 py-4 shadow-sm ${
                                         msg.role === 'user' 
-                                            ? 'bg-blue-600 text-white rounded-[20px] rounded-br-none' 
-                                            : 'bg-gray-100 text-gray-900 rounded-[20px] rounded-bl-none'
+                                            ? 'bg-blue-600 text-white rounded-[24px] rounded-br-none shadow-blue-200' 
+                                            : 'bg-white text-gray-900 rounded-[24px] rounded-bl-none border border-gray-100'
                                     }`}>
                                         {showTypingIndicator ? (
-                                            <div className="flex items-center">
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s] mx-1"></div>
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                            <div className="flex items-center py-1">
+                                                <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                                <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s] mx-1.5"></div>
+                                                <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce"></div>
                                             </div>
                                         ) : (
-                                            <div className="prose prose-base max-w-none prose-a:font-medium hover:prose-a:underline">
+                                            <div className="prose prose-base max-w-none prose-p:font-medium prose-p:leading-relaxed prose-a:font-bold hover:prose-a:underline">
                                                 <ReactMarkdown
                                                     remarkPlugins={[remarkGfm]}
                                                     components={{
@@ -751,24 +761,24 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                                                 const isCopied = copiedLink === href;
                                                 
                                                                 return (
-                                                                    <span className="inline-flex flex-col items-start my-2 p-3 bg-white/50 rounded-xl border border-blue-200/50 w-full">
+                                                                    <span className="inline-flex flex-col items-start my-3 p-4 bg-gray-50/80 rounded-[20px] border border-gray-200 w-full group-hover:border-blue-200 transition-colors">
                                                                         <a 
                                                                             href={href} 
                                                                             onClick={handleViewOnMap}
-                                                                            className={`inline-flex items-center gap-1 font-bold hover:underline cursor-pointer text-lg mb-2 ${msg.role === 'user' ? 'text-white' : 'text-blue-700'}`}
+                                                                            className={`inline-flex items-center gap-1.5 font-bold hover:underline cursor-pointer text-lg mb-3 ${msg.role === 'user' ? 'text-white' : 'text-blue-700'}`}
                                                                         >
                                                                             {children} <ExternalLinkIcon className="w-4 h-4 opacity-70" />
                                                                         </a>
                                                                         <span className="flex items-center gap-2 flex-wrap w-full">
                                                                             <button
                                                                                 onClick={handleViewOnMap}
-                                                                                className="flex-1 inline-flex justify-center items-center gap-1.5 text-xs font-medium text-blue-700 bg-white hover:bg-blue-50 px-3 py-2 rounded-full transition-colors border border-blue-100 shadow-sm"
+                                                                                className="flex-1 inline-flex justify-center items-center gap-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-blue-50 px-3 py-2.5 rounded-full transition-colors border border-gray-200 shadow-sm hover:border-blue-200 hover:text-blue-700"
                                                                             >
                                                                                 <MapIcon className="!w-4 !h-4" /> Map
                                                                             </button>
                                                                             <button
                                                                                 onClick={handleDirections}
-                                                                                className="flex-1 inline-flex justify-center items-center gap-1.5 text-xs font-medium text-blue-700 bg-white hover:bg-blue-50 px-3 py-2 rounded-full transition-colors border border-blue-100 shadow-sm"
+                                                                                className="flex-1 inline-flex justify-center items-center gap-1.5 text-xs font-bold text-gray-700 bg-white hover:bg-blue-50 px-3 py-2.5 rounded-full transition-colors border border-gray-200 shadow-sm hover:border-blue-200 hover:text-blue-700"
                                                                             >
                                                                                 <DirectionsIcon className="!w-4 !h-4" /> Directions
                                                                             </button>
@@ -776,10 +786,10 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                                                             <div className="flex gap-2">
                                                                                 <button
                                                                                     onClick={() => handleCopyLink(href)}
-                                                                                    className={`w-8 h-8 inline-flex items-center justify-center rounded-full transition-colors border shadow-sm ${
+                                                                                    className={`w-9 h-9 inline-flex items-center justify-center rounded-full transition-colors border shadow-sm ${
                                                                                         isCopied
                                                                                             ? 'text-green-700 bg-green-100 border-green-200'
-                                                                                            : 'text-gray-600 bg-white hover:bg-gray-50 border-gray-200'
+                                                                                            : 'text-gray-500 bg-white hover:bg-gray-50 border-gray-200 hover:text-blue-600'
                                                                                     }`}
                                                                                     disabled={isCopied}
                                                                                 >
@@ -788,10 +798,10 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                                                                 
                                                                                 <button
                                                                                     onClick={() => speakMessage(msg.text, index)}
-                                                                                    className={`w-8 h-8 inline-flex items-center justify-center rounded-full transition-colors border shadow-sm ${
+                                                                                    className={`w-9 h-9 inline-flex items-center justify-center rounded-full transition-colors border shadow-sm ${
                                                                                         isSpeakingThis 
                                                                                         ? 'text-red-600 bg-red-50 border-red-200' 
-                                                                                        : 'text-gray-600 bg-white hover:bg-gray-50 border-gray-200'
+                                                                                        : 'text-gray-500 bg-white hover:bg-gray-50 border-gray-200 hover:text-blue-600'
                                                                                     }`}
                                                                                     title={isSpeakingThis ? "Stop reading" : "Read aloud"}
                                                                                 >
@@ -804,12 +814,12 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                                             }
                                                             
                                                             return (
-                                                                <a href={href} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 underline ${msg.role === 'user' ? 'text-white' : 'text-blue-700'}`}>
+                                                                <a href={href} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 underline decoration-2 underline-offset-2 ${msg.role === 'user' ? 'text-white decoration-white/30' : 'text-blue-700 decoration-blue-200'}`}>
                                                                     {children} <ExternalLinkIcon />
                                                                 </a>
                                                             );
                                                         },
-                                                        p: ({children}) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>
+                                                        p: ({children}) => <p className="mb-3 last:mb-0 leading-relaxed text-base">{children}</p>
                                                     }}
                                                 >
                                                     {msg.text}
@@ -818,8 +828,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                         )}
                                     </div>
                                     {msg.role === 'user' && (
-                                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
-                                        <UserIcon />
+                                        <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                                        <UserIcon className="w-5 h-5"/>
                                         </div>
                                     )}
                                 </div>
@@ -830,12 +840,12 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
 
                 {/* Footer Input Area */}
                 {!isLive && (
-                    <footer className="p-4 border-t border-gray-100 bg-white">
-                        <div className="relative flex items-center gap-2">
+                    <footer className="p-5 border-t border-gray-100 bg-white">
+                        <div className="relative flex items-center gap-3">
                              {/* Start Live Mode */}
                             <button
                                 onClick={toggleVoiceMode}
-                                className="p-3 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                className="p-3.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors shadow-sm border border-blue-100"
                                 title="Start Live Conversation"
                             >
                                  <WaveformIcon className="w-6 h-6" />
@@ -843,13 +853,13 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                             
                             <div className="relative flex-1">
                                 {isDictating ? (
-                                    <div className="w-full h-[56px] flex items-center pl-4 pr-12 bg-red-50 border border-red-200 rounded-full animate-pulse">
-                                        <span className="text-red-600 font-medium">Listening... {input}</span>
+                                    <div className="w-full h-[60px] flex items-center pl-5 pr-14 bg-red-50 border border-red-200 rounded-full animate-pulse shadow-inner">
+                                        <span className="text-red-600 font-bold text-lg">Listening... <span className="text-gray-900 font-normal opacity-70 ml-2">{input}</span></span>
                                         <button
                                             onClick={handleDictation}
-                                            className="absolute right-2 top-1/2 -translate-y-1/2 bg-white text-red-500 rounded-full p-2 hover:bg-red-100 transition-colors shadow-sm"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 bg-white text-red-500 rounded-full p-2.5 hover:bg-red-100 transition-colors shadow-sm"
                                         >
-                                            <StopCircleIcon className="w-5 h-5" />
+                                            <StopCircleIcon className="w-6 h-6" />
                                         </button>
                                     </div>
                                 ) : (
@@ -859,16 +869,16 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                             value={input}
                                             onChange={(e) => setInput(e.target.value)}
                                             onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
-                                            placeholder="Ask about places in London..."
-                                            className="w-full text-base py-4 pl-6 pr-24 bg-gray-50 border-none text-gray-900 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white placeholder:text-gray-500 transition-all"
+                                            placeholder="Ask about places..."
+                                            className="w-full text-base font-medium py-4 pl-6 pr-28 bg-gray-50 border border-gray-200 text-gray-900 rounded-full focus:outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 focus:bg-white placeholder:text-gray-400 transition-all shadow-sm"
                                             disabled={isLoading}
                                         />
                                         
-                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                                             <button
                                                 onClick={handleDictation}
                                                 disabled={isLoading}
-                                                className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                                                className="p-2.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                                                 title="Dictate"
                                             >
                                                 <MicIcon className="w-5 h-5" />
@@ -877,7 +887,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, userCoords }) => {
                                             <button
                                                 onClick={handleSend}
                                                 disabled={isLoading || !input.trim()}
-                                                className="bg-blue-600 text-white rounded-full p-2 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shadow-sm"
+                                                className="bg-blue-600 text-white rounded-full p-2.5 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-all shadow-md active:scale-95"
                                                 aria-label="Send message"
                                             >
                                                 <SendIcon className="w-5 h-5" />
